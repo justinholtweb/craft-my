@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="My">
+    <!-- MYOB purple. The mark is an invoice with a line ruled through its total, which is the one
+         thing this plugin exists to get right. -->
+    <rect width="100" height="100" rx="18" fill="#6D2C91"/>
+    <path d="M27 22h34l14 14v42a6 6 0 0 1-6 6H33a6 6 0 0 1-6-6V28a6 6 0 0 1 6-6z" fill="#fff"/>
+    <path d="M61 22l14 14H65a4 4 0 0 1-4-4V22z" fill="#C9A6DC"/>
+    <rect x="36" y="43" width="22" height="4.5" rx="2.25" fill="#6D2C91"/>
+    <rect x="36" y="53" width="30" height="4.5" rx="2.25" fill="#6D2C91"/>
+    <rect x="36" y="63" width="30" height="4.5" rx="2.25" fill="#6D2C91" opacity=".45"/>
+    <path d="M36 71.5h30" stroke="#6D2C91" stroke-width="2" stroke-linecap="round"/>
+</svg>

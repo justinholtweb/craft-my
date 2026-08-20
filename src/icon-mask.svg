@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="My">
+    <!-- Single-colour silhouette for the CP nav, which masks rather than draws the icon. -->
+    <path d="M27 14h38l16 16v56a8 8 0 0 1-8 8H27a8 8 0 0 1-8-8V22a8 8 0 0 1 8-8zm38 6v10a4 4 0 0 0 4 4h10L65 20zM32 45h22v6H32v-6zm0 12h36v6H32v-6zm0 12h36v4H32v-4z"/>
+</svg>

@@ -1,0 +1,106 @@
+{% extends '_layouts/cp' %}
+{% import '_includes/forms' as forms %}
+
+{% set title = 'MYOB documents'|t('my') %}
+{% set selectedSubnavItem = 'documents' %}
+
+{% set crumbs = [
+    { label: 'MYOB'|t('my'), url: url('my') },
+] %}
+
+{% block content %}
+    {% if not connected %}
+        <div class="pane">
+            <p class="warning">
+                {{ 'MYOB is not connected.'|t('my') }}
+                <a href="{{ url('settings/plugins/my') }}">{{ 'Connect it'|t('my') }}</a>
+            </p>
+        </div>
+    {% endif %}
+
+    <div class="flex" style="gap: 16px; margin-bottom: 16px;">
+        {% for status, count in counts %}
+            <div>
+                <span class="status {{ status == 'synced' ? 'green' : (status == 'failed' ? 'red' : (status == 'pending' ? 'orange' : 'grey')) }}"></span>
+                <strong>{{ count }}</strong>
+                <span class="light">{{ status }}</span>
+            </div>
+        {% endfor %}
+    </div>
+
+    <form method="get" class="flex" style="gap: 8px; margin-bottom: 16px;">
+        <select name="type" onchange="this.form.submit()">
+            <option value="">{{ 'All types'|t('my') }}</option>
+            {% for value, label in {
+                invoice: 'Invoice'|t('my'),
+                payment: 'Payment'|t('my'),
+                creditnote: 'Credit note'|t('my'),
+                refund: 'Credit refund'|t('my'),
+            } %}
+                <option value="{{ value }}" {{ criteria.docType ?? '' == value ? 'selected' }}>{{ label }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="status" onchange="this.form.submit()">
+            <option value="">{{ 'All statuses'|t('my') }}</option>
+            {% for value, label in {
+                synced: 'Synced'|t('my'),
+                pending: 'Pending'|t('my'),
+                failed: 'Failed'|t('my'),
+                skipped: 'Skipped'|t('my'),
+            } %}
+                <option value="{{ value }}" {{ criteria.status ?? '' == value ? 'selected' }}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </form>
+
+    {% if documents is empty %}
+        <div class="pane">
+            <p class="light">{{ 'Nothing has been pushed to MYOB yet.'|t('my') }}</p>
+        </div>
+    {% else %}
+        <table class="data fullwidth">
+            <thead>
+                <tr>
+                    <th>{{ 'Type'|t('my') }}</th>
+                    <th>{{ 'Order'|t('my') }}</th>
+                    <th>{{ 'MYOB number'|t('my') }}</th>
+                    <th>{{ 'Amount'|t('my') }}</th>
+                    <th>{{ 'Status'|t('my') }}</th>
+                    <th>{{ 'Updated'|t('my') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for document in documents %}
+                    <tr>
+                        <td><a href="{{ document.getCpUrl() }}">{{ document.getTypeLabel() }}</a></td>
+                        <td><a href="{{ document.getOrderCpUrl() }}">#{{ document.orderId }}</a></td>
+                        <td class="code">{{ document.myobNumber ?? '—' }}</td>
+                        <td>{{ document.amount is not null ? document.amount|number(decimals=2) : '—' }} {{ document.currency }}</td>
+                        <td>
+                            <span class="status {{ document.getStatusColor() }}"></span>
+                            {{ document.getStatusLabel() }}
+                            {% if document.attempts > 1 %}
+                                <span class="light">({{ '{n} attempts'|t('my', { n: document.attempts }) }})</span>
+                            {% endif %}
+                        </td>
+                        <td class="light">{{ document.dateUpdated ? document.dateUpdated|datetime('short') : '' }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% set totalPages = (total / perPage)|round(0, 'ceil') %}
+        {% if totalPages > 1 %}
+            <div class="flex" style="gap: 8px; margin-top: 16px;">
+                {% if page > 1 %}
+                    <a class="btn" href="{{ url('my/documents', criteria|merge({ page: page - 1 })) }}">{{ '← Previous'|t('my') }}</a>
+                {% endif %}
+                <span class="light">{{ 'Page {page} of {total}'|t('my', { page: page, total: totalPages }) }}</span>
+                {% if page < totalPages %}
+                    <a class="btn" href="{{ url('my/documents', criteria|merge({ page: page + 1 })) }}">{{ 'Next →'|t('my') }}</a>
+                {% endif %}
+            </div>
+        {% endif %}
+    {% endif %}
+{% endblock %}

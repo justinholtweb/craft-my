@@ -1,0 +1,728 @@
+{# Field names carry no `settings[…]` prefix. `craft\base\Plugin::settingsResponse()` runs this
+   template's output through `View::namespaceInputs(…, 'settings')`, so a name written as
+   `settings[foo]` here posts as `settings[settings][foo]` and saves nothing at all — the screen
+   looks perfect, Craft says "Plugin settings saved", and every edit is silently discarded.
+
+   Nothing on this screen is inside a `<form>` of its own either. The settings screen *is* a form,
+   and a nested one is not ignored: the parser drops the inner tag and keeps its children, so a
+   second `action` input lands beside the real one and Save runs whichever came last. Buttons post
+   with `Craft.sendActionRequest`. #}
+{% import '_includes/forms' as forms %}
+
+{% set isConnected = connection.isConnected() %}
+{% set isLocal = settings.isLocal() %}
+
+{% if not commerceReady %}
+    <div class="pane">
+        <p class="error">{{ 'Craft Commerce is not installed or enabled. My needs it to do anything.'|t('my') }}</p>
+    </div>
+{% endif %}
+
+{# ---------------------------------------------------------------- Connection #}
+<h2>{{ 'Connection'|t('my') }}</h2>
+
+<div class="pane">
+    <div class="flex" style="align-items: center; gap: 8px;">
+        <span class="status {{ isConnected ? 'green' : 'red' }}"></span>
+        <strong>
+            {% if isConnected %}
+                {{ 'Connected to {name}'|t('my', { name: connection.getLabel() }) }}
+            {% else %}
+                {{ 'Not connected'|t('my') }}
+            {% endif %}
+        </strong>
+        {% if connection.dateLastVerified %}
+            <span class="light">{{ 'Last checked {date}'|t('my', { date: connection.dateLastVerified|datetime('short') }) }}</span>
+        {% endif %}
+    </div>
+
+    <div class="flex" style="margin-top: 12px; gap: 8px;">
+        {% if not isLocal %}
+            <a class="btn" href="{{ actionUrl('my/oauth/connect') }}">
+                {{ isConnected ? 'Reconnect'|t('my') : 'Connect to MYOB'|t('my') }}
+            </a>
+        {% endif %}
+        <button type="button" class="btn" id="my-test">{{ 'Test connection'|t('my') }}</button>
+        {% if isConnected %}
+            <button type="button" class="btn" id="my-disconnect">{{ 'Disconnect'|t('my') }}</button>
+        {% endif %}
+        <span id="my-test-result" class="light"></span>
+    </div>
+</div>
+
+{{ forms.selectField({
+    label: 'Where MYOB lives'|t('my'),
+    instructions: 'Cloud files are reached over the internet with OAuth. A local AccountRight server runs on the merchant’s own machine and uses the company file login directly.'|t('my'),
+    id: 'mode',
+    name: 'mode',
+    value: settings.mode,
+    options: [
+        { label: 'MYOB cloud (AccountRight Live / MYOB Business)'|t('my'), value: 'cloud' },
+        { label: 'AccountRight local server'|t('my'), value: 'local' },
+    ],
+    toggle: true,
+    targetPrefix: 'my-mode-',
+}) }}
+
+<div id="my-mode-cloud" class="{{ isLocal ? 'hidden' }}">
+    <div class="pane">
+        <p>
+            {{ 'Create an app at {link} and register this redirect URL against it, exactly as printed — MYOB matches it character for character.'|t('my', {
+                link: '<a href="https://my.myob.com.au/au/bd/DevAppList.aspx" rel="noopener" target="_blank">developer.myob.com</a>'
+            })|raw }}
+        </p>
+
+        {{ forms.textField({
+            label: 'Redirect URL'|t('my'),
+            id: 'my-redirect-uri',
+            value: settings.getRedirectUri(),
+            readonly: true,
+            class: 'code',
+        }) }}
+    </div>
+
+    {{ forms.autosuggestField({
+        label: 'API key'|t('my'),
+        instructions: 'The developer key for your MYOB app.'|t('my'),
+        id: 'clientId',
+        name: 'clientId',
+        value: settings.clientId,
+        suggestEnvVars: true,
+    }) }}
+
+    {{ forms.autosuggestField({
+        label: 'API secret'|t('my'),
+        id: 'clientSecret',
+        name: 'clientSecret',
+        value: settings.clientSecret,
+        suggestEnvVars: true,
+    }) }}
+</div>
+
+<div id="my-mode-local" class="{{ not isLocal ? 'hidden' }}">
+    {{ forms.textField({
+        label: 'AccountRight server URL'|t('my'),
+        instructions: 'Where the AccountRight API service is listening. Craft has to be able to reach it — a server on the bookkeeper’s desktop is not reachable from a hosted site.'|t('my'),
+        id: 'localBaseUrl',
+        name: 'localBaseUrl',
+        value: settings.localBaseUrl,
+        errors: settings.getErrors('localBaseUrl'),
+    }) }}
+</div>
+
+<div class="pane">
+    <p>
+        {{ 'These are the login for the **company file itself**, not for your MYOB account. They are two different things and MYOB rejects both with the same 401.'|t('my')|md(inlineOnly=true) }}
+    </p>
+
+    {{ forms.autosuggestField({
+        label: 'Company file username'|t('my'),
+        instructions: 'Usually `Administrator`.'|t('my'),
+        id: 'cfUsername',
+        name: 'cfUsername',
+        value: settings.cfUsername,
+        suggestEnvVars: true,
+    }) }}
+
+    {{ forms.autosuggestField({
+        label: 'Company file password'|t('my'),
+        instructions: 'Leave blank if the file has no password.'|t('my'),
+        id: 'cfPassword',
+        name: 'cfPassword',
+        value: settings.cfPassword,
+        suggestEnvVars: true,
+    }) }}
+</div>
+
+<div class="pane">
+    <h3>{{ 'Company file'|t('my') }}</h3>
+
+    <div class="flex" style="gap: 8px; align-items: flex-end;">
+        <div style="flex: 1;">
+            {{ forms.textField({
+                label: 'Company file ID'|t('my'),
+                instructions: 'Set here to pin the file per environment. Leave blank to use whichever file was chosen below.'|t('my'),
+                id: 'companyFileId',
+                name: 'companyFileId',
+                value: settings.companyFileId,
+                placeholder: connection.companyFileId ?? '',
+                class: 'code',
+            }) }}
+        </div>
+    </div>
+
+    <div class="flex" style="gap: 8px; margin-top: 8px;">
+        <button type="button" class="btn" id="my-list-files">{{ 'List company files'|t('my') }}</button>
+        <span id="my-files-result" class="light"></span>
+    </div>
+
+    <div id="my-files" style="margin-top: 12px;"></div>
+</div>
+
+{# ------------------------------------------------------------------ Invoices #}
+<h2>{{ 'Invoices'|t('my') }}</h2>
+
+{{ forms.lightswitchField({
+    label: 'Push orders automatically'|t('my'),
+    instructions: 'Off still allows manual pushes from an order and from the console.'|t('my'),
+    id: 'syncEnabled',
+    name: 'syncEnabled',
+    on: settings.syncEnabled,
+}) }}
+
+{{ forms.checkboxSelectField({
+    label: 'Invoice orders in these statuses'|t('my'),
+    instructions: 'Leave everything unchecked to invoice every completed order as soon as it completes.'|t('my'),
+    id: 'invoiceStatusHandles',
+    name: 'invoiceStatusHandles',
+    values: settings.invoiceStatusHandles,
+    options: orderStatuses,
+    showAllOption: false,
+}) }}
+
+{{ forms.selectField({
+    label: 'Invoice layout'|t('my'),
+    instructions: 'Service invoices post every line to an account and need nothing to exist in MYOB first. Item invoices reference inventory items, which gives correct stock and cost of goods — but every SKU you sell has to already be in the company file.'|t('my'),
+    id: 'invoiceLayout',
+    name: 'invoiceLayout',
+    value: settings.invoiceLayout,
+    options: [
+        { label: 'Service'|t('my'), value: 'service' },
+        { label: 'Item'|t('my'), value: 'item' },
+    ],
+}) }}
+
+{{ forms.selectField({
+    label: 'When a SKU is not in MYOB'|t('my'),
+    instructions: 'Item invoices only.'|t('my'),
+    id: 'itemFallback',
+    name: 'itemFallback',
+    value: settings.itemFallback,
+    options: [
+        { label: 'Post the line to the sales account instead'|t('my'), value: 'service' },
+        { label: 'Refuse to push the order'|t('my'), value: 'fail' },
+    ],
+}) }}
+
+{{ forms.selectField({
+    label: 'Invoice number'|t('my'),
+    instructions: 'MYOB caps invoice numbers at 13 characters. Letting MYOB assign them makes an interrupted push impossible to recover automatically, so it is not the default.'|t('my'),
+    id: 'numberSource',
+    name: 'numberSource',
+    value: settings.numberSource,
+    options: [
+        { label: 'Order reference'|t('my'), value: 'reference' },
+        { label: 'Order number (short)'|t('my'), value: 'shortNumber' },
+        { label: 'Order number (full)'|t('my'), value: 'number' },
+        { label: 'Order ID'|t('my'), value: 'id' },
+        { label: 'Let MYOB assign it'|t('my'), value: 'myob' },
+    ],
+}) }}
+
+{{ forms.textField({
+    label: 'Number prefix'|t('my'),
+    id: 'numberPrefix',
+    name: 'numberPrefix',
+    value: settings.numberPrefix,
+    size: 8,
+    errors: settings.getErrors('numberPrefix'),
+}) }}
+
+{{ forms.selectField({
+    label: 'Invoice date'|t('my'),
+    id: 'invoiceDateSource',
+    name: 'invoiceDateSource',
+    value: settings.invoiceDateSource,
+    options: [
+        { label: 'The date the order was placed'|t('my'), value: 'ordered' },
+        { label: 'The date it was pushed'|t('my'), value: 'today' },
+    ],
+}) }}
+
+<div class="pane">
+    <h3>{{ 'Accounts'|t('my') }}</h3>
+    <p class="light">{{ 'MYOB account codes, e.g. `4-1000`. Run `craft my/reference/accounts` to list them.'|t('my')|md(inlineOnly=true) }}</p>
+
+    {{ forms.textField({
+        label: 'Sales account'|t('my'),
+        instructions: 'Where product lines post.'|t('my'),
+        id: 'salesAccount',
+        name: 'salesAccount',
+        value: settings.salesAccount,
+        class: 'code',
+        errors: settings.getErrors('salesAccount'),
+    }) }}
+
+    {{ forms.textField({
+        label: 'Freight account'|t('my'),
+        instructions: 'Leave blank to use the sales account.'|t('my'),
+        id: 'freightAccount',
+        name: 'freightAccount',
+        value: settings.freightAccount,
+        class: 'code',
+    }) }}
+
+    {{ forms.textField({
+        label: 'Discount account'|t('my'),
+        instructions: 'Where cart-level discounts post. Leave blank to use the sales account.'|t('my'),
+        id: 'discountAccount',
+        name: 'discountAccount',
+        value: settings.discountAccount,
+        class: 'code',
+    }) }}
+
+    {{ forms.textField({
+        label: 'Rounding account'|t('my'),
+        instructions: 'Only used when totals disagree and you have chosen to add a rounding line.'|t('my'),
+        id: 'roundingAccount',
+        name: 'roundingAccount',
+        value: settings.roundingAccount,
+        class: 'code',
+    }) }}
+
+    <div class="flex" style="gap: 8px; margin-top: 8px;">
+        <button type="button" class="btn" id="my-refresh-reference">{{ 'Refresh accounts and tax codes from MYOB'|t('my') }}</button>
+        <span id="my-reference-result" class="light"></span>
+    </div>
+</div>
+
+{{ forms.textField({
+    label: 'Journal memo'|t('my'),
+    instructions: 'An object template rendered against the order.'|t('my'),
+    id: 'journalMemoTemplate',
+    name: 'journalMemoTemplate',
+    value: settings.journalMemoTemplate,
+    class: 'code',
+}) }}
+
+{{ forms.textField({
+    label: 'Invoice comment'|t('my'),
+    instructions: 'Shown on the invoice itself. An object template; leave blank for none.'|t('my'),
+    id: 'commentTemplate',
+    name: 'commentTemplate',
+    value: settings.commentTemplate,
+    class: 'code',
+}) }}
+
+{{ forms.selectField({
+    label: 'Delivery status'|t('my'),
+    instructions: 'What MYOB should think still needs doing with the invoice. If Craft already emailed the customer, “already sent” keeps MYOB’s to-do list honest.'|t('my'),
+    id: 'invoiceDeliveryStatus',
+    name: 'invoiceDeliveryStatus',
+    value: settings.invoiceDeliveryStatus,
+    options: [
+        { label: 'Already printed or sent'|t('my'), value: 'AlreadyPrintedOrSent' },
+        { label: 'To be printed'|t('my'), value: 'Print' },
+        { label: 'To be emailed'|t('my'), value: 'Email' },
+        { label: 'To be printed and emailed'|t('my'), value: 'PrintAndEmail' },
+    ],
+}) }}
+
+{# ----------------------------------------------------------------------- Tax #}
+<h2>{{ 'Tax'|t('my') }}</h2>
+
+{{ forms.selectField({
+    label: 'Prices include tax'|t('my'),
+    instructions: 'Posting tax-inclusive guarantees the invoice total matches what the customer paid. Posting exclusive lets MYOB compute the tax, which can disagree with Commerce if a code is mapped to a different rate.'|t('my'),
+    id: 'taxInclusive',
+    name: 'taxInclusive',
+    value: settings.taxInclusive === null ? '' : (settings.taxInclusive ? '1' : '0'),
+    options: [
+        { label: 'Follow the order'|t('my'), value: '' },
+        { label: 'Always tax-inclusive'|t('my'), value: '1' },
+        { label: 'Always tax-exclusive'|t('my'), value: '0' },
+    ],
+}) }}
+
+{{ forms.textField({
+    label: 'Default tax code'|t('my'),
+    id: 'defaultTaxCode',
+    name: 'defaultTaxCode',
+    value: settings.defaultTaxCode,
+    size: 8,
+    class: 'code',
+}) }}
+
+{{ forms.textField({
+    label: 'Freight tax code'|t('my'),
+    id: 'freightTaxCode',
+    name: 'freightTaxCode',
+    value: settings.freightTaxCode,
+    size: 8,
+    class: 'code',
+}) }}
+
+{{ forms.textField({
+    label: 'Zero-rated tax code'|t('my'),
+    instructions: 'Used for lines Commerce charged no tax on.'|t('my'),
+    id: 'zeroTaxCode',
+    name: 'zeroTaxCode',
+    value: settings.zeroTaxCode,
+    size: 8,
+    class: 'code',
+}) }}
+
+{% if taxCategories %}
+    <div class="field">
+        <div class="heading"><label>{{ 'Tax category mapping'|t('my') }}</label></div>
+        <div class="instructions"><p>{{ 'Which MYOB tax code each Commerce tax category posts under. Blank falls back to the default above.'|t('my') }}</p></div>
+        <table class="data fullwidth">
+            <thead>
+                <tr>
+                    <th>{{ 'Commerce tax category'|t('my') }}</th>
+                    <th>{{ 'MYOB tax code'|t('my') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for category in taxCategories %}
+                    <tr>
+                        <td>{{ category.name }} <code>{{ category.handle }}</code></td>
+                        <td>
+                            <input type="text" class="text code" size="8"
+                                   name="taxCodeMap[{{ category.handle }}]"
+                                   value="{{ settings.taxCodeMap[category.handle] ?? '' }}">
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+
+{{ forms.textField({
+    label: 'Rounding tolerance'|t('my'),
+    instructions: 'How far the invoice may drift from the order total before the setting below applies. In cents.'|t('my'),
+    id: 'tolerance',
+    name: 'tolerance',
+    value: settings.tolerance,
+    type: 'number',
+    size: 5,
+    errors: settings.getErrors('tolerance'),
+}) }}
+
+{{ forms.selectField({
+    label: 'When totals disagree'|t('my'),
+    instructions: 'Refusing is the default deliberately: an invoice for the wrong amount is harder to find and much harder to undo than a failed push.'|t('my'),
+    id: 'onTotalMismatch',
+    name: 'onTotalMismatch',
+    value: settings.onTotalMismatch,
+    options: [
+        { label: 'Refuse to push the order'|t('my'), value: 'fail' },
+        { label: 'Add a rounding line'|t('my'), value: 'round' },
+        { label: 'Push anyway and log a warning'|t('my'), value: 'ignore' },
+    ],
+}) }}
+
+{# ----------------------------------------------------------------- Customers #}
+<h2>{{ 'Customers'|t('my') }}</h2>
+
+{{ forms.lightswitchField({
+    label: 'Create customer cards'|t('my'),
+    instructions: 'Off posts every order against the default card below.'|t('my'),
+    id: 'syncCustomers',
+    name: 'syncCustomers',
+    on: settings.syncCustomers,
+}) }}
+
+{{ forms.selectField({
+    label: 'How to identify customers'|t('my'),
+    id: 'customerMode',
+    name: 'customerMode',
+    value: settings.customerMode,
+    options: [
+        { label: 'A card per email address'|t('my'), value: 'perCustomer' },
+        { label: 'One card for everything'|t('my'), value: 'singleCard' },
+    ],
+}) }}
+
+{{ forms.textField({
+    label: 'Default customer UID'|t('my'),
+    instructions: 'Used for guest orders with no email, and for every order in single-card mode.'|t('my'),
+    id: 'defaultCustomerUid',
+    name: 'defaultCustomerUid',
+    value: settings.defaultCustomerUid,
+    class: 'code',
+}) }}
+
+{{ forms.textField({
+    label: 'Default customer name'|t('my'),
+    instructions: 'If no UID is set, a card with this company name is found or created.'|t('my'),
+    id: 'defaultCustomerName',
+    name: 'defaultCustomerName',
+    value: settings.defaultCustomerName,
+}) }}
+
+{{ forms.textField({
+    label: 'Card ID template'|t('my'),
+    instructions: 'An object template for a new card’s MYOB card ID. Blank lets MYOB assign one.'|t('my'),
+    id: 'customerDisplayIdTemplate',
+    name: 'customerDisplayIdTemplate',
+    value: settings.customerDisplayIdTemplate,
+    class: 'code',
+}) }}
+
+{{ forms.lightswitchField({
+    label: 'Update existing cards'|t('my'),
+    instructions: 'Overwrite an existing card’s address from the order. Off by default: the merchant’s own bookkeeping usually beats whatever a customer typed at checkout.'|t('my'),
+    id: 'updateExistingContacts',
+    name: 'updateExistingContacts',
+    on: settings.updateExistingContacts,
+}) }}
+
+{{ forms.textField({
+    label: 'Phone field handle'|t('my'),
+    instructions: 'Craft 5 addresses have no phone attribute. Name the custom field that holds one, if you have one.'|t('my'),
+    id: 'phoneFieldHandle',
+    name: 'phoneFieldHandle',
+    value: settings.phoneFieldHandle,
+    class: 'code',
+}) }}
+
+{# ------------------------------------------------------------------ Payments #}
+<h2>{{ 'Payments'|t('my') }}</h2>
+
+{{ forms.lightswitchField({
+    label: 'Record payments'|t('my'),
+    instructions: 'Applies each successful Commerce payment to the MYOB invoice, so it does not sit unpaid forever.'|t('my'),
+    id: 'syncPayments',
+    name: 'syncPayments',
+    on: settings.syncPayments,
+}) }}
+
+{{ forms.selectField({
+    label: 'Deposit to'|t('my'),
+    id: 'depositTo',
+    name: 'depositTo',
+    value: settings.depositTo,
+    options: [
+        { label: 'Undeposited funds'|t('my'), value: 'UndepositedFunds' },
+        { label: 'A bank account'|t('my'), value: 'Account' },
+    ],
+}) }}
+
+{{ forms.textField({
+    label: 'Bank account'|t('my'),
+    instructions: 'Only used when depositing to an account.'|t('my'),
+    id: 'paymentAccount',
+    name: 'paymentAccount',
+    value: settings.paymentAccount,
+    class: 'code',
+}) }}
+
+{{ forms.selectField({
+    label: 'Default payment method'|t('my'),
+    instructions: 'MYOB only accepts payment methods from its own list, so an unmapped gateway falls back to this rather than being rejected.'|t('my'),
+    id: 'defaultPaymentMethod',
+    name: 'defaultPaymentMethod',
+    value: settings.defaultPaymentMethod,
+    options: paymentMethods,
+}) }}
+
+{% if gateways %}
+    <div class="field">
+        <div class="heading"><label>{{ 'Gateway mapping'|t('my') }}</label></div>
+        <div class="instructions"><p>{{ 'Which MYOB payment method each Commerce gateway records as.'|t('my') }}</p></div>
+        <table class="data fullwidth">
+            <thead>
+                <tr>
+                    <th>{{ 'Commerce gateway'|t('my') }}</th>
+                    <th>{{ 'MYOB payment method'|t('my') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for gateway in gateways %}
+                    <tr>
+                        <td>{{ gateway.name }} <code>{{ gateway.handle }}</code></td>
+                        <td>
+                            <select name="paymentMethodMap[{{ gateway.handle }}]">
+                                <option value="">{{ '(use the default)'|t('my') }}</option>
+                                {% for method in paymentMethods %}
+                                    <option value="{{ method.value }}"
+                                        {{ (settings.paymentMethodMap[gateway.handle] ?? '') == method.value ? 'selected' }}>
+                                        {{ method.label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+
+{# ------------------------------------------------------------------- Refunds #}
+<h2>{{ 'Refunds'|t('my') }}</h2>
+
+{{ forms.lightswitchField({
+    label: 'Raise credit notes'|t('my'),
+    instructions: 'A Commerce refund becomes a MYOB credit note — an invoice with negative amounts.'|t('my'),
+    id: 'syncRefunds',
+    name: 'syncRefunds',
+    on: settings.syncRefunds,
+}) }}
+
+{{ forms.selectField({
+    label: 'What to do with the credit'|t('my'),
+    id: 'refundMode',
+    name: 'refundMode',
+    value: settings.refundMode,
+    options: [
+        { label: 'Leave it on the customer’s account'|t('my'), value: 'creditNote' },
+        { label: 'Also record the money going back out'|t('my'), value: 'creditNoteAndRefund' },
+    ],
+}) }}
+
+{{ forms.textField({
+    label: 'Refund account'|t('my'),
+    instructions: 'Where refunded money comes out of. Falls back to the bank account above.'|t('my'),
+    id: 'refundAccount',
+    name: 'refundAccount',
+    value: settings.refundAccount,
+    class: 'code',
+}) }}
+
+{# ------------------------------------------------------------------ Advanced #}
+<h2>{{ 'Advanced'|t('my') }}</h2>
+
+{{ forms.textField({
+    label: 'Requests per second'|t('my'),
+    instructions: 'MYOB allows 8 per second per API key. Staying under it is cheaper than handling the rejections it produces.'|t('my'),
+    id: 'requestsPerSecond',
+    name: 'requestsPerSecond',
+    value: settings.requestsPerSecond,
+    type: 'number',
+    size: 4,
+    errors: settings.getErrors('requestsPerSecond'),
+}) }}
+
+{{ forms.textField({
+    label: 'Timeout'|t('my'),
+    instructions: 'Seconds to wait on MYOB.'|t('my'),
+    id: 'timeout',
+    name: 'timeout',
+    value: settings.timeout,
+    type: 'number',
+    size: 4,
+    errors: settings.getErrors('timeout'),
+}) }}
+
+{{ forms.textField({
+    label: 'Queue attempts'|t('my'),
+    instructions: 'How many times a failed push is retried before it waits for a human.'|t('my'),
+    id: 'maxAttempts',
+    name: 'maxAttempts',
+    value: settings.maxAttempts,
+    type: 'number',
+    size: 4,
+    errors: settings.getErrors('maxAttempts'),
+}) }}
+
+{{ forms.lightswitchField({
+    label: 'Log requests'|t('my'),
+    id: 'loggingEnabled',
+    name: 'loggingEnabled',
+    on: settings.loggingEnabled,
+}) }}
+
+{{ forms.lightswitchField({
+    label: 'Log payloads'|t('my'),
+    instructions: 'Keep the request and response bodies. Credentials and tokens are redacted before anything is written.'|t('my'),
+    id: 'logPayloads',
+    name: 'logPayloads',
+    on: settings.logPayloads,
+}) }}
+
+{{ forms.textField({
+    label: 'Log retention'|t('my'),
+    instructions: 'Days of history to keep. 0 keeps everything.'|t('my'),
+    id: 'logRetentionDays',
+    name: 'logRetentionDays',
+    value: settings.logRetentionDays,
+    type: 'number',
+    size: 5,
+    errors: settings.getErrors('logRetentionDays'),
+}) }}
+
+{# ------------------------------------------------------------------------ JS #}
+{% js %}
+(function () {
+    var post = function (action, data, onDone) {
+        Craft.sendActionRequest('POST', action, { data: data || {} })
+            .then(function (response) { onDone(response.data || {}); })
+            .catch(function (error) {
+                var data = (error && error.response && error.response.data) || {};
+                onDone({ success: false, message: data.message || data.error || Craft.t('my', 'The request failed.') });
+            });
+    };
+
+    var say = function (id, result) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = result.message || '';
+        el.style.color = result.success ? '' : '#CF1124';
+    };
+
+    var bind = function (id, action, handler) {
+        var button = document.getElementById(id);
+        if (!button) return;
+        button.addEventListener('click', function () {
+            button.classList.add('loading');
+            post(action, {}, function (result) {
+                button.classList.remove('loading');
+                handler(result);
+            });
+        });
+    };
+
+    bind('my-test', 'my/settings/test', function (r) { say('my-test-result', r); });
+
+    bind('my-refresh-reference', 'my/settings/refresh-reference', function (r) {
+        say('my-reference-result', r);
+    });
+
+    bind('my-list-files', 'my/settings/company-files', function (r) {
+        say('my-files-result', r);
+
+        var wrapper = document.getElementById('my-files');
+        if (!wrapper) return;
+        wrapper.innerHTML = '';
+
+        (r.files || []).forEach(function (file) {
+            var row = document.createElement('div');
+            row.className = 'flex';
+            row.style.cssText = 'gap: 8px; align-items: center; padding: 4px 0;';
+
+            var label = document.createElement('span');
+            label.innerHTML = '<strong></strong> <code></code>';
+            label.querySelector('strong').textContent = file.Name;
+            label.querySelector('code').textContent = file.Id;
+
+            var choose = document.createElement('button');
+            choose.type = 'button';
+            choose.className = 'btn small';
+            choose.textContent = Craft.t('my', 'Use this file');
+            choose.addEventListener('click', function () {
+                choose.classList.add('loading');
+                post('my/settings/select-company-file', { id: file.Id, uri: file.Uri, name: file.Name }, function (result) {
+                    choose.classList.remove('loading');
+                    say('my-files-result', result);
+                });
+            });
+
+            row.appendChild(choose);
+            row.appendChild(label);
+            wrapper.appendChild(row);
+        });
+    });
+
+    var disconnect = document.getElementById('my-disconnect');
+    if (disconnect) {
+        disconnect.addEventListener('click', function () {
+            if (!confirm(Craft.t('my', 'Disconnect from MYOB? Nothing in MYOB is changed.'))) return;
+            disconnect.classList.add('loading');
+            post('my/settings/disconnect', {}, function () { window.location.reload(); });
+        });
+    }
+})();
+{% endjs %}

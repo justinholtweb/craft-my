@@ -1,0 +1,81 @@
+{% extends '_layouts/cp' %}
+
+{% set title = document.getTypeLabel() ~ ' ' ~ (document.myobNumber ?? '#' ~ document.id) %}
+{% set selectedSubnavItem = 'documents' %}
+
+{% set crumbs = [
+    { label: 'MYOB'|t('my'), url: url('my') },
+    { label: 'Documents'|t('my'), url: url('my/documents') },
+] %}
+
+{% block content %}
+    <div class="pane">
+        <table class="data fullwidth">
+            <tbody>
+                <tr><th style="width: 180px;">{{ 'Status'|t('my') }}</th>
+                    <td><span class="status {{ document.getStatusColor() }}"></span> {{ document.getStatusLabel() }}</td></tr>
+                <tr><th>{{ 'Order'|t('my') }}</th>
+                    <td>
+                        {% if order %}
+                            <a href="{{ document.getOrderCpUrl() }}">{{ order.reference ?? order.getShortNumber() }}</a>
+                        {% else %}
+                            <span class="light">{{ 'The order has been deleted.'|t('my') }}</span>
+                        {% endif %}
+                    </td></tr>
+                <tr><th>{{ 'MYOB UID'|t('my') }}</th><td class="code">{{ document.myobUid ?? '—' }}</td></tr>
+                <tr><th>{{ 'MYOB number'|t('my') }}</th><td class="code">{{ document.myobNumber ?? '—' }}</td></tr>
+                <tr><th>{{ 'Amount'|t('my') }}</th>
+                    <td>{{ document.amount is not null ? document.amount|number(decimals=2) : '—' }} {{ document.currency }}</td></tr>
+                <tr><th>{{ 'Attempts'|t('my') }}</th><td>{{ document.attempts }}</td></tr>
+                <tr><th>{{ 'Synced'|t('my') }}</th>
+                    <td>{{ document.dateSynced ? document.dateSynced|datetime('short') : '—' }}</td></tr>
+            </tbody>
+        </table>
+
+        {% if document.lastError %}
+            <p class="error" style="margin-top: 12px;">{{ document.lastError }}</p>
+        {% endif %}
+
+        {% if currentUser.can('my-unlinkDocuments') %}
+            <div class="flex" style="gap: 8px; margin-top: 12px;">
+                <button type="button" class="btn" id="my-unlink">{{ 'Unlink from MYOB'|t('my') }}</button>
+                <span class="light">{{ 'Forgets the link here. Nothing in MYOB is changed.'|t('my') }}</span>
+            </div>
+        {% endif %}
+    </div>
+
+    {% if document.payload %}
+        <div class="pane">
+            <h2>{{ 'What was sent'|t('my') }}</h2>
+            <pre class="code" style="max-height: 420px; overflow: auto;">{{ document.payload }}</pre>
+        </div>
+    {% endif %}
+
+    {% if document.response %}
+        <div class="pane">
+            <h2>{{ 'What MYOB said'|t('my') }}</h2>
+            <pre class="code" style="max-height: 420px; overflow: auto;">{{ document.response }}</pre>
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% js %}
+(function () {
+    var button = document.getElementById('my-unlink');
+    if (!button) return;
+
+    button.addEventListener('click', function () {
+        if (!confirm(Craft.t('my', 'Unlink this document? It stays in MYOB, but Craft will be willing to push the order again.'))) return;
+
+        button.classList.add('loading');
+
+        Craft.sendActionRequest('POST', 'my/documents/unlink', {
+            data: { documentId: {{ document.id }} }
+        }).then(function () {
+            window.location.href = '{{ url('my/documents') }}';
+        }).catch(function () {
+            button.classList.remove('loading');
+        });
+    });
+})();
+{% endjs %}

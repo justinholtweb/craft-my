@@ -1,0 +1,55 @@
+{
+    "name": "justinholtweb/craft-my",
+    "description": "MYOB integration for Craft Commerce — push orders to MYOB as invoices, keep customer cards in step, apply payments, and raise credit notes for refunds.",
+    "version": "5.0.0",
+    "type": "craft-plugin",
+    "keywords": [
+        "craftcms",
+        "craft-plugin",
+        "craft-commerce",
+        "commerce",
+        "myob",
+        "accountright",
+        "accounting",
+        "invoicing",
+        "bookkeeping"
+    ],
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "Justin Holt",
+            "homepage": "https://justinholt.com"
+        }
+    ],
+    "support": {
+        "email": "justin@justinholt.com"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "require": {
+        "php": "^8.2",
+        "ext-json": "*",
+        "craftcms/cms": "^5.3.0",
+        "craftcms/commerce": "^5.0.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "justinholtweb\\my\\": "src/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "craftcms/plugin-installer": true,
+            "yiisoft/yii2-composer": true
+        }
+    },
+    "extra": {
+        "name": "My",
+        "handle": "my",
+        "developer": "Justin Holt",
+        "developerUrl": "https://justinholt.com",
+        "documentationUrl": "https://github.com/justinholtweb/craft-my/blob/main/README.md",
+        "changelogUrl": "https://raw.githubusercontent.com/justinholtweb/craft-my/main/CHANGELOG.md",
+        "class": "justinholtweb\\my\\Plugin"
+    }
+}

@@ -1,0 +1,48 @@
+{% extends '_layouts/cp' %}
+
+{% set title = entry.action ~ ' — ' ~ entry.dateCreated|datetime('short') %}
+{% set selectedSubnavItem = 'log' %}
+
+{% set crumbs = [
+    { label: 'MYOB'|t('my'), url: url('my') },
+    { label: 'Log'|t('my'), url: url('my/log') },
+] %}
+
+{% block content %}
+    <div class="pane">
+        <table class="data fullwidth">
+            <tbody>
+                <tr><th style="width: 160px;">{{ 'Level'|t('my') }}</th>
+                    <td><span class="status {{ entry.getLevelColor() }}"></span> {{ entry.level }}</td></tr>
+                <tr><th>{{ 'Request'|t('my') }}</th><td class="code">{{ entry.method }} {{ entry.endpoint }}</td></tr>
+                <tr><th>{{ 'Status'|t('my') }}</th><td>{{ entry.statusCode ?? '—' }}</td></tr>
+                <tr><th>{{ 'Duration'|t('my') }}</th><td>{{ entry.durationMs ? entry.durationMs ~ 'ms' : '—' }}</td></tr>
+                <tr><th>{{ 'Order'|t('my') }}</th>
+                    <td>
+                        {% if entry.orderId %}
+                            <a href="{{ cpUrl('commerce/orders/' ~ entry.orderId) }}">#{{ entry.orderId }}</a>
+                        {% else %}—{% endif %}
+                    </td></tr>
+                <tr><th>{{ 'Summary'|t('my') }}</th><td>{{ entry.summary ?? '—' }}</td></tr>
+            </tbody>
+        </table>
+
+        {% if entry.message %}
+            <p style="margin-top: 12px;">{{ entry.message }}</p>
+        {% endif %}
+    </div>
+
+    {% if entry.request %}
+        <div class="pane">
+            <h2>{{ 'Request'|t('my') }}</h2>
+            <pre class="code" style="max-height: 420px; overflow: auto;">{{ entry.request }}</pre>
+        </div>
+    {% endif %}
+
+    {% if entry.response %}
+        <div class="pane">
+            <h2>{{ 'Response'|t('my') }}</h2>
+            <pre class="code" style="max-height: 420px; overflow: auto;">{{ entry.response }}</pre>
+        </div>
+    {% endif %}
+{% endblock %}
