@@ -1,6 +1,6 @@
 {% extends '_layouts/cp' %}
 
-{% set title = document.getTypeLabel() ~ ' ' ~ (document.myobNumber ?? '#' ~ document.id) %}
+{% set title = document.getTypeLabel() ~ ' ' ~ (document.myobNumber ?? ('#' ~ document.id)) %}
 {% set selectedSubnavItem = 'documents' %}
 
 {% set crumbs = [

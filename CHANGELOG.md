@@ -29,3 +29,8 @@ Initial release.
   `my/reference/accounts`, `my/reference/tax-codes`, `my/reference/item`, `my/reference/refresh`,
   `my/log/prune`, `my/log/clear`.
 - `craft.myob` in Twig, for showing an invoice number on a customer's order page.
+
+### Fixed
+
+- The document detail heading glued the MYOB number to the document ID. Twig's `??` binds tighter than `~`, so `document.myobNumber ?? '#' ~ document.id` parsed as `(document.myobNumber ?? '#') ~ document.id`.
+
