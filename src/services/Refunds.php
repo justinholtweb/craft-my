@@ -44,6 +44,11 @@ class Refunds extends Component
         if (Money::equals($amount, (float)$order->getTotalPrice(), 0)) {
             // A full refund: mirror the invoice, every amount reversed.
             $payload = $invoices->buildPayload($order, $customerRef, true);
+
+            if (isset($payload['Number'])) {
+                $payload['Number'] = $invoices->invoiceNumber($order, true, $this->creditNoteSequence($order, $transaction));
+            }
+
             $payload['JournalMemo'] = mb_substr($this->memo($order, $transaction), 0, self::MAX_MEMO);
 
             return $payload;
@@ -101,7 +106,7 @@ class Refunds extends Component
             'JournalMemo' => mb_substr($this->memo($order, $transaction), 0, self::MAX_MEMO),
         ];
 
-        $number = $invoices->invoiceNumber($order, true);
+        $number = $invoices->invoiceNumber($order, true, $this->creditNoteSequence($order, $transaction));
 
         if ($number !== null) {
             $payload['Number'] = $number;
@@ -173,6 +178,26 @@ class Refunds extends Component
     public function shouldRefundToBank(): bool
     {
         return Plugin::getInstance()->getSettings()->refundMode === Settings::REFUND_CREDIT_NOTE_AND_REFUND;
+    }
+
+    /**
+     * Which credit note on the order this refund is: 1 for the first, 2 for the second…
+     *
+     * Counted over the order's successful refunds in id order, so a refund keeps its number when
+     * later ones are added — the ledger may push them hours apart, and a retry must rebuild the
+     * same number it sent the first time.
+     */
+    public function creditNoteSequence(Order $order, Transaction $transaction): int
+    {
+        $ids = array_map(
+            static fn(Transaction $t) => (int)$t->id,
+            Plugin::getInstance()->getPayments()->getRefundTransactions($order),
+        );
+        sort($ids);
+
+        $position = array_search((int)$transaction->id, $ids, true);
+
+        return $position === false ? 1 : $position + 1;
     }
 
     private function memo(Order $order, Transaction $transaction): string

@@ -8,99 +8,147 @@
     { label: 'MYOB'|t('my'), url: url('my') },
 ] %}
 
+{% set typeOptions = {
+    invoice: 'Invoice'|t('my'),
+    payment: 'Payment'|t('my'),
+    creditnote: 'Credit note'|t('my'),
+    refund: 'Credit refund'|t('my'),
+} %}
+
+{% set statusOptions = {
+    synced: 'Synced'|t('my'),
+    pending: 'Pending'|t('my'),
+    failed: 'Failed'|t('my'),
+    skipped: 'Skipped'|t('my'),
+} %}
+
+{# The controller's criteria keys (`docType`) are not the query-string names (`type`), so the
+   pagination links are built from the query names — merging `criteria` would drop the filter. #}
+{% set queryParams = {
+    type: criteria.docType ?? null,
+    status: criteria.status ?? null,
+}|filter %}
+
+{% block toolbar %}
+    <form method="get" class="flex" data-my-filters>
+        {{ forms.select({
+            name: 'type',
+            value: criteria.docType ?? '',
+            options: { '': 'All types'|t('my') }|merge(typeOptions),
+            inputAttributes: { aria: { label: 'Type'|t('my') } },
+        }) }}
+
+        {{ forms.select({
+            name: 'status',
+            value: criteria.status ?? '',
+            options: { '': 'All statuses'|t('my') }|merge(statusOptions),
+            inputAttributes: { aria: { label: 'Status'|t('my') } },
+        }) }}
+
+        <noscript><button type="submit" class="btn">{{ 'Filter'|t('my') }}</button></noscript>
+    </form>
+{% endblock %}
+
 {% block content %}
     {% if not connected %}
-        <div class="pane">
-            <p class="warning">
-                {{ 'MYOB is not connected.'|t('my') }}
-                <a href="{{ url('settings/plugins/my') }}">{{ 'Connect it'|t('my') }}</a>
-            </p>
+        <div class="readable">
+            <blockquote class="note warning">
+                <p>
+                    {{ 'MYOB is not connected.'|t('my') }}
+                    {{ tag('a', { text: 'Connect it'|t('my'), href: cpUrl('settings/plugins/my') }) }}
+                </p>
+            </blockquote>
         </div>
+        <hr>
     {% endif %}
 
-    <div class="flex" style="gap: 16px; margin-bottom: 16px;">
-        {% for status, count in counts %}
-            <div>
-                <span class="status {{ status == 'synced' ? 'green' : (status == 'failed' ? 'red' : (status == 'pending' ? 'orange' : 'grey')) }}"></span>
-                <strong>{{ count }}</strong>
-                <span class="light">{{ status }}</span>
-            </div>
-        {% endfor %}
-    </div>
-
-    <form method="get" class="flex" style="gap: 8px; margin-bottom: 16px;">
-        <select name="type" onchange="this.form.submit()">
-            <option value="">{{ 'All types'|t('my') }}</option>
-            {% for value, label in {
-                invoice: 'Invoice'|t('my'),
-                payment: 'Payment'|t('my'),
-                creditnote: 'Credit note'|t('my'),
-                refund: 'Credit refund'|t('my'),
-            } %}
-                <option value="{{ value }}" {{ criteria.docType ?? '' == value ? 'selected' }}>{{ label }}</option>
+    {% if counts is not empty %}
+        <ul class="flex flex-wrap" style="gap: var(--m); margin-block-end: var(--m);">
+            {% for status, count in counts %}
+                <li>
+                    <span class="status {{ status == 'synced' ? 'green' : (status == 'failed' ? 'red' : (status == 'pending' ? 'orange' : 'grey')) }}" aria-hidden="true"></span>
+                    <strong>{{ count|number }}</strong>
+                    <span class="light">{{ statusOptions[status] ?? status }}</span>
+                </li>
             {% endfor %}
-        </select>
-
-        <select name="status" onchange="this.form.submit()">
-            <option value="">{{ 'All statuses'|t('my') }}</option>
-            {% for value, label in {
-                synced: 'Synced'|t('my'),
-                pending: 'Pending'|t('my'),
-                failed: 'Failed'|t('my'),
-                skipped: 'Skipped'|t('my'),
-            } %}
-                <option value="{{ value }}" {{ criteria.status ?? '' == value ? 'selected' }}>{{ label }}</option>
-            {% endfor %}
-        </select>
-    </form>
+        </ul>
+    {% endif %}
 
     {% if documents is empty %}
-        <div class="pane">
-            <p class="light">{{ 'Nothing has been pushed to MYOB yet.'|t('my') }}</p>
+        <div class="zilch">
+            <p>
+                {{ queryParams is empty
+                    ? 'Nothing has been pushed to MYOB yet.'|t('my')
+                    : 'No documents match these filters.'|t('my') }}
+            </p>
         </div>
     {% else %}
-        <table class="data fullwidth">
-            <thead>
-                <tr>
-                    <th>{{ 'Type'|t('my') }}</th>
-                    <th>{{ 'Order'|t('my') }}</th>
-                    <th>{{ 'MYOB number'|t('my') }}</th>
-                    <th>{{ 'Amount'|t('my') }}</th>
-                    <th>{{ 'Status'|t('my') }}</th>
-                    <th>{{ 'Updated'|t('my') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for document in documents %}
+        <div class="tablepane">
+            <table class="data fullwidth">
+                <thead>
                     <tr>
-                        <td><a href="{{ document.getCpUrl() }}">{{ document.getTypeLabel() }}</a></td>
-                        <td><a href="{{ document.getOrderCpUrl() }}">#{{ document.orderId }}</a></td>
-                        <td class="code">{{ document.myobNumber ?? '—' }}</td>
-                        <td>{{ document.amount is not null ? document.amount|number(decimals=2) : '—' }} {{ document.currency }}</td>
-                        <td>
-                            <span class="status {{ document.getStatusColor() }}"></span>
-                            {{ document.getStatusLabel() }}
-                            {% if document.attempts > 1 %}
-                                <span class="light">({{ '{n} attempts'|t('my', { n: document.attempts }) }})</span>
-                            {% endif %}
-                        </td>
-                        <td class="light">{{ document.dateUpdated ? document.dateUpdated|datetime('short') : '' }}</td>
+                        <th scope="col">{{ 'Type'|t('my') }}</th>
+                        <th scope="col">{{ 'Order'|t('my') }}</th>
+                        <th scope="col">{{ 'MYOB number'|t('my') }}</th>
+                        <th scope="col">{{ 'Amount'|t('my') }}</th>
+                        <th scope="col">{{ 'Status'|t('my') }}</th>
+                        <th scope="col">{{ 'Updated'|t('my') }}</th>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        {% set totalPages = (total / perPage)|round(0, 'ceil') %}
-        {% if totalPages > 1 %}
-            <div class="flex" style="gap: 8px; margin-top: 16px;">
-                {% if page > 1 %}
-                    <a class="btn" href="{{ url('my/documents', criteria|merge({ page: page - 1 })) }}">{{ '← Previous'|t('my') }}</a>
-                {% endif %}
-                <span class="light">{{ 'Page {page} of {total}'|t('my', { page: page, total: totalPages }) }}</span>
-                {% if page < totalPages %}
-                    <a class="btn" href="{{ url('my/documents', criteria|merge({ page: page + 1 })) }}">{{ 'Next →'|t('my') }}</a>
-                {% endif %}
-            </div>
-        {% endif %}
+                </thead>
+                <tbody>
+                    {% for document in documents %}
+                        <tr>
+                            <th scope="row"><a href="{{ document.getCpUrl() }}">{{ document.getTypeLabel() }}</a></th>
+                            <td><a href="{{ document.getOrderCpUrl() }}">#{{ document.orderId }}</a></td>
+                            <td>
+                                {% if document.myobNumber %}
+                                    <code>{{ document.myobNumber }}</code>
+                                {% else %}
+                                    <span class="light">{{ 'Not assigned'|t('my') }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if document.amount is not null %}
+                                    {{ document.amount|number(decimals=2) }} {{ document.currency }}
+                                {% else %}
+                                    <span class="light">{{ 'Unknown'|t('my') }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="status {{ document.getStatusColor() }}" aria-hidden="true"></span>
+                                {{ document.getStatusLabel() }}
+                                {% if document.attempts > 1 %}
+                                    <span class="light">({{ '{n} attempts'|t('my', { n: document.attempts }) }})</span>
+                                {% endif %}
+                            </td>
+                            <td class="light">{{ document.dateUpdated ? document.dateUpdated|datetime('short') }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     {% endif %}
 {% endblock %}
+
+{% block footer %}
+    {% if total > perPage %}
+        {% set totalPages = (total / perPage)|round(0, 'ceil') %}
+        {% include '_includes/pagination' with {
+            pageInfo: {
+                first: (page - 1) * perPage + 1,
+                last: min(page * perPage, total),
+                total: total,
+                prevUrl: page > 1 ? url('my/documents', queryParams|merge({ page: page - 1 })) : null,
+                nextUrl: page < totalPages ? url('my/documents', queryParams|merge({ page: page + 1 })) : null,
+            },
+            itemLabel: 'document'|t('my'),
+            itemsLabel: 'documents'|t('my'),
+        } only %}
+    {% endif %}
+{% endblock %}
+
+{% js %}
+document.querySelectorAll('[data-my-filters] select').forEach(function (select) {
+    select.addEventListener('change', function () { select.form.submit(); });
+});
+{% endjs %}

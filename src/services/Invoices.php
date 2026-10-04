@@ -646,7 +646,7 @@ class Invoices extends Component
     /**
      * The invoice number, or null to let MYOB auto-increment.
      */
-    public function invoiceNumber(Order $order, bool $negate = false): ?string
+    public function invoiceNumber(Order $order, bool $negate = false, int $sequence = 1): ?string
     {
         $settings = Plugin::getInstance()->getSettings();
 
@@ -664,8 +664,10 @@ class Invoices extends Component
         $prefix = trim($settings->numberPrefix);
 
         if ($negate) {
-            // A credit note cannot reuse the invoice's number, and MYOB does not auto-suffix.
-            $prefix .= 'CR';
+            // A credit note cannot reuse the invoice's number, and MYOB does not auto-suffix. Nor
+            // can two credit notes share one, so the second refund on an order is `CR2-…`, the
+            // third `CR3-…`. The first stays plain `CR…`, which is what it has always been.
+            $prefix .= 'CR' . ($sequence > 1 ? $sequence . '-' : '');
         }
 
         $number = $prefix . $base;

@@ -71,7 +71,7 @@ class SyncController extends Controller
         $order = $this->findOrder($reference);
 
         if ($order === null) {
-            $this->stderr("No order matches “$reference”.\n", Console::FG_RED);
+            $this->stderr("No order matches “{$reference}”.\n", Console::FG_RED);
 
             return ExitCode::DATAERR;
         }
@@ -80,7 +80,8 @@ class SyncController extends Controller
 
         if ($this->dryRun) {
             try {
-                $customerRef = $plugin->getContacts()->resolveForOrder($order);
+                // Read-only: a dry run must not create (or update) a card in MYOB.
+                $customerRef = $plugin->getContacts()->resolveForOrder($order, true);
                 $payload = $plugin->getInvoices()->buildPayload($order, $customerRef);
                 $check = $plugin->getInvoices()->reconcile($order, $payload);
             } catch (MyobApiException $e) {
@@ -162,7 +163,7 @@ class SyncController extends Controller
 
         $this->stdout(count($orderIds) . " orders to retry.\n");
 
-        return $this->run(array_values($orderIds));
+        return $this->pushEach(array_values($orderIds));
     }
 
     /**

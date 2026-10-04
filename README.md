@@ -4,7 +4,10 @@
 customer card, with the payment applied and a credit note raised if it is later refunded. Nothing
 is entered twice, and every request either end makes is visible in a log.
 
-Requires **Craft CMS 5.3+**, **Craft Commerce 5.0+** and **PHP 8.2+**. One edition, $99.
+Requires **Craft CMS 5.3+**, **Craft Commerce 5.0+** and **PHP 8.2+**. One edition: $99, then
+$79 a year for updates.
+
+**Documentation:** https://justinholt.com/plugins/craft-my/docs
 
 ---
 
@@ -50,8 +53,10 @@ time — including after a request that succeeded but whose response was lost.
   row, and a `pending` row is the signal to go and *ask* MYOB whether the document exists before
   POSTing it again. Claiming afterwards would make a lost response indistinguishable from a failed
   request, which is how duplicate invoices are made.
-- Every invoice carries the Craft order reference in `Number` and in `JournalMemo`, so a human can
-  reconcile even if the ledger is lost.
+- Every invoice carries the Craft order reference in `CustomerPurchaseOrderNumber` and
+  `JournalMemo` (and, by default, in `Number`), so a human can reconcile even if the ledger is
+  lost — and so can My: recovery and *Push again* look the invoice up by UID, then `Number`, then
+  that reference, and re-link it rather than sending a duplicate.
 
 ## Connecting
 
@@ -106,20 +111,22 @@ php craft my/sync/status                 # connection, ledger counts, what is ou
 
 php craft my/connection/test             # ask MYOB who we are
 php craft my/connection/company-files    # list the files this connection can see
-php craft my/connection/refresh          # force a token refresh
+php craft my/connection/refresh          # force a new access token
 
 php craft my/reference/accounts          # the chart of accounts, with the codes settings wants
 php craft my/reference/tax-codes
 php craft my/reference/item <number>
 php craft my/reference/refresh
 
+php craft my/log/index 50                # the most recent entries
 php craft my/log/prune --days=30
 php craft my/log/clear
 ```
 
 `my/sync/order --dryRun` builds the payload through the same code the real push uses, so what it
 prints is what MYOB would receive — not a reassuring approximation. The CP order panel's *Preview*
-button does the same thing.
+button does the same thing. Both are read-only: nothing is created in MYOB, not even a customer
+card — a customer with no card yet shows as the placeholder `new-card-created-on-push`.
 
 ## Twig
 
@@ -141,8 +148,9 @@ deletes anything in MYOB — an invoice reconciled against a bank feed cannot be
 
 ## What it does not do
 
-Inventory and stock write-back into Commerce, purchase orders, and MYOB Acumatica (a different API
-entirely).
+Inventory and stock write-back into Commerce, purchase orders, and MYOB Acumatica or MYOB Exo
+(different products with different APIs — those are covered by the free
+[Erpy for MYOB](https://justinholt.com/plugins/craft-erpy/docs/myob) add-on).
 
 ## Testing
 
@@ -158,4 +166,4 @@ ddev exec php /var/www/craft-my/tests/integration/checks.php
 
 ## License
 
-Proprietary. © Justin Holt.
+The Craft License. See `LICENSE.md`.

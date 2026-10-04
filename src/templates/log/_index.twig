@@ -1,4 +1,5 @@
 {% extends '_layouts/cp' %}
+{% import '_includes/forms' as forms %}
 
 {% set title = 'MYOB log'|t('my') %}
 {% set selectedSubnavItem = 'log' %}
@@ -7,77 +8,134 @@
     { label: 'MYOB'|t('my'), url: url('my') },
 ] %}
 
-{% block content %}
-    {# The filter is `action_`, not `action`: `action` is how Craft is told which controller action
-       to run, so a query string carrying one would be routed rather than filtered. #}
-    <form method="get" class="flex" style="gap: 8px; margin-bottom: 16px;">
-        <select name="action_" onchange="this.form.submit()">
-            <option value="">{{ 'All actions'|t('my') }}</option>
-            {% for action in actions %}
-                <option value="{{ action }}" {{ criteria.action ?? '' == action ? 'selected' }}>{{ action }}</option>
-            {% endfor %}
-        </select>
+{% set levelLabels = { info: 'Info'|t('my'), warning: 'Warning'|t('my'), error: 'Error'|t('my') } %}
 
-        <select name="level" onchange="this.form.submit()">
-            <option value="">{{ 'All levels'|t('my') }}</option>
-            {% for value, label in { info: 'Info'|t('my'), warning: 'Warning'|t('my'), error: 'Error'|t('my') } %}
-                <option value="{{ value }}" {{ criteria.level ?? '' == value ? 'selected' }}>{{ label }}</option>
-            {% endfor %}
-        </select>
+{# The filter is `action_`, not `action`: `action` is how Craft is told which controller action
+   to run, so a query string carrying one would be routed rather than filtered. For the same
+   reason the pagination links are built from the query names, never by merging `criteria`
+   (whose key is `action`). #}
+{% set queryParams = {
+    action_: criteria.action ?? null,
+    level: criteria.level ?? null,
+}|filter %}
+
+{% do view.registerTranslations('my', [
+    'Clear the whole log? This cannot be undone.',
+]) %}
+
+{% block toolbar %}
+    <form method="get" class="flex" data-my-filters>
+        {% set actionOptions = { '': 'All actions'|t('my') } %}
+        {% for action in actions %}
+            {% set actionOptions = actionOptions|merge({ (action): action }) %}
+        {% endfor %}
+
+        {{ forms.select({
+            name: 'action_',
+            value: criteria.action ?? '',
+            options: actionOptions,
+            inputAttributes: { aria: { label: 'Action'|t('my') } },
+        }) }}
+
+        {{ forms.select({
+            name: 'level',
+            value: criteria.level ?? '',
+            options: { '': 'All levels'|t('my') }|merge(levelLabels),
+            inputAttributes: { aria: { label: 'Level'|t('my') } },
+        }) }}
+
+        <noscript><button type="submit" class="btn">{{ 'Filter'|t('my') }}</button></noscript>
     </form>
+{% endblock %}
 
+{% block content %}
     {% if entries is empty %}
-        <div class="pane"><p class="light">{{ 'Nothing logged yet.'|t('my') }}</p></div>
+        <div class="zilch">
+            <p>
+                {{ queryParams is empty
+                    ? 'Nothing logged yet.'|t('my')
+                    : 'No log entries match these filters.'|t('my') }}
+            </p>
+        </div>
     {% else %}
-        <table class="data fullwidth">
-            <thead>
-                <tr>
-                    <th>{{ 'When'|t('my') }}</th>
-                    <th>{{ 'Action'|t('my') }}</th>
-                    <th>{{ 'Request'|t('my') }}</th>
-                    <th>{{ 'Code'|t('my') }}</th>
-                    <th>{{ 'Time'|t('my') }}</th>
-                    <th>{{ 'Summary'|t('my') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for entry in entries %}
+        <div class="tablepane">
+            <table class="data fullwidth">
+                <thead>
                     <tr>
-                        <td class="light" style="white-space: nowrap;">
-                            <a href="{{ url('my/log/' ~ entry.id) }}">{{ entry.dateCreated|datetime('short') }}</a>
-                        </td>
-                        <td>
-                            <span class="status {{ entry.getLevelColor() }}"></span>
-                            {{ entry.action }}
-                        </td>
-                        <td class="code" style="font-size: 11px;">{{ entry.method }} {{ entry.endpoint }}</td>
-                        <td>{{ entry.statusCode ?? '—' }}</td>
-                        <td class="light">{{ entry.durationMs ? entry.durationMs ~ 'ms' : '' }}</td>
-                        <td>{{ entry.summary ?? entry.message|slice(0, 90) }}</td>
+                        <th scope="col">{{ 'When'|t('my') }}</th>
+                        <th scope="col">{{ 'Level'|t('my') }}</th>
+                        <th scope="col">{{ 'Action'|t('my') }}</th>
+                        <th scope="col">{{ 'Request'|t('my') }}</th>
+                        <th scope="col">{{ 'Code'|t('my') }}</th>
+                        <th scope="col">{{ 'Time'|t('my') }}</th>
+                        <th scope="col">{{ 'Summary'|t('my') }}</th>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    {% for entry in entries %}
+                        <tr>
+                            <th scope="row" class="nowrap">
+                                <a href="{{ url('my/log/' ~ entry.id) }}">{{ entry.dateCreated|datetime('short') }}</a>
+                            </th>
+                            <td class="nowrap">
+                                <span class="status {{ entry.getLevelColor() }}" aria-hidden="true"></span>
+                                {{ levelLabels[entry.level] ?? entry.level }}
+                            </td>
+                            <td>{{ entry.action }}</td>
+                            <td>{% if entry.endpoint %}<code>{{ entry.method }} {{ entry.endpoint }}</code>{% endif %}</td>
+                            <td>{{ entry.statusCode }}</td>
+                            <td class="light nowrap">{{ entry.durationMs ? '{ms} ms'|t('my', { ms: entry.durationMs }) }}</td>
+                            <td>{{ entry.summary ?? entry.message|slice(0, 90) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+{% endblock %}
 
+{% block footer %}
+    {% if total > perPage %}
         {% set totalPages = (total / perPage)|round(0, 'ceil') %}
-        {% if totalPages > 1 %}
-            <div class="flex" style="gap: 8px; margin-top: 16px;">
-                {% if page > 1 %}
-                    <a class="btn" href="{{ url('my/log', criteria|merge({ page: page - 1 })) }}">{{ '← Previous'|t('my') }}</a>
-                {% endif %}
-                <span class="light">{{ 'Page {page} of {total}'|t('my', { page: page, total: totalPages }) }}</span>
-                {% if page < totalPages %}
-                    <a class="btn" href="{{ url('my/log', criteria|merge({ page: page + 1 })) }}">{{ 'Next →'|t('my') }}</a>
-                {% endif %}
-            </div>
-        {% endif %}
+        {% include '_includes/pagination' with {
+            pageInfo: {
+                first: (page - 1) * perPage + 1,
+                last: min(page * perPage, total),
+                total: total,
+                prevUrl: page > 1 ? url('my/log', queryParams|merge({ page: page - 1 })) : null,
+                nextUrl: page < totalPages ? url('my/log', queryParams|merge({ page: page + 1 })) : null,
+            },
+            itemLabel: 'entry'|t('my'),
+            itemsLabel: 'entries'|t('my'),
+        } only %}
+    {% elseif entries is not empty %}
+        <div></div>
+    {% endif %}
 
-        {# A real, top-level form — this page is not inside one. #}
-        <form method="post" accept-charset="UTF-8" style="margin-top: 24px;">
+    {% if entries is not empty and currentUser.can('my-clearLog') %}
+        {# A real, top-level form — this page is not a full-page form, so nothing encloses it. #}
+        <form method="post" accept-charset="UTF-8" data-my-clear-log>
             {{ csrfInput() }}
             {{ actionInput('my/log/clear') }}
             {{ redirectInput('my/log') }}
-            <button type="submit" class="btn">{{ 'Clear the log'|t('my') }}</button>
+            <button type="submit" class="btn caution">{{ 'Clear the log'|t('my') }}</button>
         </form>
     {% endif %}
 {% endblock %}
+
+{% js %}
+(function () {
+document.querySelectorAll('[data-my-filters] select').forEach(function (select) {
+    select.addEventListener('change', function () { select.form.submit(); });
+});
+
+var clearForm = document.querySelector('[data-my-clear-log]');
+if (clearForm) {
+    clearForm.addEventListener('submit', function (event) {
+        if (!confirm(Craft.t('my', 'Clear the whole log? This cannot be undone.'))) {
+            event.preventDefault();
+        }
+    });
+}
+})();
+{% endjs %}

@@ -34,6 +34,16 @@ use yii\db\IntegrityException;
  */
 class Sync extends Component
 {
+    /**
+     * Mutex name prefix for the per-order push lock.
+     */
+    public const PUSH_LOCK_PREFIX = 'my:push:';
+
+    /**
+     * Seconds to wait for another push of the same order to finish before giving up.
+     */
+    private const PUSH_LOCK_TIMEOUT = 10;
+
     // Deciding
     // -------------------------------------------------------------------------
 
@@ -95,9 +105,44 @@ class Sync extends Component
      * to an invoice that does not exist, and a credit note against a missing invoice is just a
      * mysterious negative balance.
      *
+     * Serialised per order. Completing an order typically queues more than one job — the
+     * completion itself, the purchase transaction, often a status change — and the ledger's unique
+     * index only stops two *rows*: two workers that both find the same `pending` row would both
+     * POST. The lock makes "read the ledger, then call MYOB" one step per order. A caller that
+     * cannot get it is told so and does nothing; the queue's retry picks the order up again.
+     *
      * @return array{ok: bool, invoice: SyncDocument|null, payments: SyncDocument[], refunds: SyncDocument[], messages: string[]}
      */
     public function pushOrder(Order $order, bool $force = false): array
+    {
+        $mutex = Craft::$app->getMutex();
+        $lock = self::PUSH_LOCK_PREFIX . $order->id;
+
+        if (!$mutex->acquire($lock, self::PUSH_LOCK_TIMEOUT)) {
+            return [
+                'ok' => false,
+                'invoice' => null,
+                'payments' => [],
+                'refunds' => [],
+                'messages' => [
+                    Craft::t('my', 'Another push for this order is already running. Try again in a moment.'),
+                ],
+            ];
+        }
+
+        try {
+            return $this->pushOrderLocked($order, $force);
+        } finally {
+            $mutex->release($lock);
+        }
+    }
+
+    /**
+     * The body of `pushOrder()`, run with the order's lock held.
+     *
+     * @return array{ok: bool, invoice: SyncDocument|null, payments: SyncDocument[], refunds: SyncDocument[], messages: string[]}
+     */
+    private function pushOrderLocked(Order $order, bool $force): array
     {
         $settings = Plugin::getInstance()->getSettings();
         $messages = [];
@@ -183,7 +228,15 @@ class Sync extends Component
         ]);
 
         // A previous attempt may have succeeded and lost its answer on the way home.
-        $recovered = $this->recoverInvoice($order, $document, $payload);
+        try {
+            $recovered = $this->recoverInvoice($order, $document, $payload);
+        } catch (MyobApiException $e) {
+            // MYOB could not say whether the invoice is there. Leave the claim retryable and send
+            // nothing until it can.
+            $messages[] = $e->getMessage();
+
+            return $this->fail($order, SyncDocument::TYPE_INVOICE, SyncDocument::SOURCE_ORDER, $e->getMessage(), true);
+        }
 
         if ($recovered !== null) {
             $messages[] = Craft::t('my', 'Found the invoice already in MYOB as {number}; linked it rather than creating a second one.', [
@@ -323,10 +376,16 @@ class Sync extends Component
     /**
      * Ask MYOB whether an invoice we may already have sent is there.
      *
-     * Only worth doing when a previous attempt got far enough to claim a row and then failed —
-     * otherwise it is a wasted request on every single push. When the number is auto-assigned by
-     * MYOB there is nothing to search on, and the honest answer is that this cannot be recovered
-     * automatically; that is one of the reasons the default is to send our own number.
+     * Only worth doing when a previous attempt got far enough to claim a row — otherwise it is a
+     * wasted request on every single push. Three ways to find it, most certain first:
+     *
+     * 1. The row already holds a UID — a forced "Push again" of an invoiced order. Read it back;
+     *    a 404 means the merchant deleted it in MYOB and a new one is wanted.
+     * 2. Our own `Number`, when we send one.
+     * 3. `CustomerPurchaseOrderNumber`, which carries the order reference on every invoice — the
+     *    only handle there is when MYOB assigns the number itself.
+     *
+     * @throws MyobApiException when MYOB gives no answer (timeout, 429, 5xx), so the caller sends nothing
      */
     private function recoverInvoice(Order $order, SyncDocument $document, array $payload): ?SyncDocument
     {
@@ -334,32 +393,65 @@ class Sync extends Component
             return null;
         }
 
-        $number = $payload['Number'] ?? null;
+        $api = Plugin::getInstance()->getApi();
+        $endpoint = Plugin::getInstance()->getInvoices()->endpoint();
+        $existing = null;
+        $label = null;
 
-        if (!is_string($number) || $number === '') {
-            return null;
+        if ($document->myobUid) {
+            try {
+                $read = $api->get($endpoint . '/' . rawurlencode($document->myobUid), [
+                    'action' => 'invoice.recover',
+                    'orderId' => $order->id,
+                ]);
+                $existing = is_array($read) && !empty($read['UID']) ? $read : null;
+            } catch (MyobApiException $e) {
+                // A 404 is an answer: it was deleted in MYOB. No answer at all is not, and posting
+                // on the strength of it is exactly the duplicate this method exists to prevent.
+                if ($e->isRetryable()) {
+                    throw $e;
+                }
+                $existing = null;
+            }
         }
 
-        try {
-            $filter = "Number eq '" . str_replace("'", "''", $number) . "'";
-            $existing = Plugin::getInstance()->getApi()->findOne(
-                Plugin::getInstance()->getInvoices()->endpoint(),
-                $filter,
-                ['action' => 'invoice.recover', 'orderId' => $order->id],
-            );
-        } catch (MyobApiException) {
-            return null;
+        if ($existing === null) {
+            $number = $payload['Number'] ?? null;
+            $poNumber = $payload['CustomerPurchaseOrderNumber'] ?? null;
+
+            // Single quotes inside an OData string literal are escaped by doubling them.
+            $filter = match (true) {
+                is_string($number) && $number !== '' => "Number eq '" . str_replace("'", "''", $number) . "'",
+                is_string($poNumber) && $poNumber !== '' => "CustomerPurchaseOrderNumber eq '" . str_replace("'", "''", $poNumber) . "'",
+                default => null,
+            };
+
+            if ($filter === null) {
+                return null;
+            }
+
+            try {
+                $existing = $api->findOne($endpoint, $filter, ['action' => 'invoice.recover', 'orderId' => $order->id]);
+            } catch (MyobApiException $e) {
+                if ($e->isRetryable()) {
+                    throw $e;
+                }
+
+                return null;
+            }
         }
 
         if ($existing === null || empty($existing['UID'])) {
             return null;
         }
 
+        $label = (string)($existing['Number'] ?? $existing['UID']);
+
         Plugin::getInstance()->getLog()->write('invoice.recover', [
             'level' => LogEntry::LEVEL_WARNING,
             'orderId' => $order->id,
-            'summary' => Craft::t('my', 'Recovered invoice {number}', ['number' => $number]),
-            'message' => Craft::t('my', 'A previous attempt reached MYOB but its response was lost. Linking the existing invoice instead of creating a duplicate.'),
+            'summary' => Craft::t('my', 'Recovered invoice {number}', ['number' => $label]),
+            'message' => Craft::t('my', 'The invoice was already in MYOB. Linking it rather than creating a duplicate.'),
         ]);
 
         return $this->succeed($document, $existing);

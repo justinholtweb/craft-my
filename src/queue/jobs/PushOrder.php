@@ -71,16 +71,21 @@ class PushOrder extends BaseJob
     /**
      * @inheritdoc
      *
-     * Craft's default is `craft\queue\Queue::$maxRetries`; MYOB's failures are mostly transient
-     * (rate limits, twenty-minute maintenance windows), so this is worth being patient about.
+     * One push is a customer lookup, the invoice, and each payment and refund — and every one of
+     * those requests may be retried three times inside `Api`, honouring a `Retry-After` of up to a
+     * minute. Craft's default of 300 seconds can be outlived by a bad afternoon at MYOB, and a job
+     * that outlives its TTR is handed to a second worker while the first is still running.
      */
     public function getTtr(): int
     {
-        return 300;
+        return 900;
     }
 
     /**
      * @inheritdoc
+     *
+     * MYOB's failures are mostly transient (rate limits, maintenance windows), so this is worth
+     * being patient about; the number of attempts is a setting.
      */
     public function canRetry($attempt, $error): bool
     {

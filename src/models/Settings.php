@@ -376,7 +376,11 @@ class Settings extends Model
             return;
         }
 
-        if (filter_var($this->localBaseUrl, FILTER_VALIDATE_URL) === false) {
+        // `FILTER_VALIDATE_URL` alone accepts `file://`, `ftp://` and `gopher://`. Every request
+        // carries the company file credentials, so only an HTTP server may receive them.
+        $scheme = strtolower((string)parse_url(trim($this->localBaseUrl), PHP_URL_SCHEME));
+
+        if (filter_var(trim($this->localBaseUrl), FILTER_VALIDATE_URL) === false || !in_array($scheme, ['http', 'https'], true)) {
             $this->addError($attribute, Craft::t('my', 'Enter the URL of your AccountRight server, e.g. http://localhost:8080/accountright/'));
         }
     }

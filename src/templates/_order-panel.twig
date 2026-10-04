@@ -1,62 +1,91 @@
-{# Rendered into Commerce's own order edit screen via the `cp.commerce.order.edit.details` hook.
+{# Rendered into Commerce's own order edit screen via the `cp.commerce.order.edit.details` hook,
+   i.e. into the details sidebar — so it uses the sidebar's titled-panel shape (`fieldset` +
+   `legend.h6` + `.meta`), the same one Craft gives an element's Status panel.
    No `<form>` here: this is already inside Craft's page form, and a nested one would put a second
    `action` input next to the real one. #}
 {# `{% for … if … %}` was removed in Twig 3; the filter is the replacement. #}
 {% set invoice = documents|filter(d => d.docType == 'invoice')|first %}
 
-<div class="order-details-panel" style="margin-top: 14px;">
-    <h3 class="order-details-title">{{ 'MYOB'|t('my') }}</h3>
+{% do view.registerTranslations('my', [
+    'Pushing…',
+    'Done.',
+    'The push failed.',
+    'Totals agree.',
+    'Totals disagree by {cents}c.',
+    'Could not build a preview.',
+]) %}
 
-    {% if not connected %}
-        <p class="light">{{ 'MYOB is not connected.'|t('my') }}</p>
-    {% elseif documents is empty %}
-        <p class="light">{{ 'This order has not been pushed to MYOB.'|t('my') }}</p>
-    {% else %}
-        <table class="data fullwidth">
-            <tbody>
-                {% for document in documents %}
-                    <tr>
-                        <td>
-                            <span class="status {{ document.getStatusColor() }}"></span>
-                            <a href="{{ document.getCpUrl() }}">{{ document.getTypeLabel() }}</a>
-                        </td>
-                        <td class="code">{{ document.myobNumber ?? '—' }}</td>
-                        <td class="light">{{ document.getStatusLabel() }}</td>
-                    </tr>
-                    {% if document.lastError %}
+<fieldset class="my-order-panel">
+    <legend class="h6">{{ 'MYOB'|t('my') }}</legend>
+    <div class="meta">
+        <div class="my-order-panel__body">
+            {% if not connected %}
+                <p class="light">{{ 'MYOB is not connected.'|t('my') }}</p>
+            {% elseif documents is empty %}
+                <p class="light">{{ 'This order has not been pushed to MYOB.'|t('my') }}</p>
+            {% else %}
+                <table class="data fullwidth">
+                    <thead class="visually-hidden">
                         <tr>
-                            <td colspan="3" class="error" style="font-size: 11px;">{{ document.lastError }}</td>
+                            <th scope="col">{{ 'Type'|t('my') }}</th>
+                            <th scope="col">{{ 'MYOB number'|t('my') }}</th>
+                            <th scope="col">{{ 'Status'|t('my') }}</th>
                         </tr>
-                    {% endif %}
-                {% endfor %}
-            </tbody>
-        </table>
-    {% endif %}
+                    </thead>
+                    <tbody>
+                        {% for document in documents %}
+                            <tr>
+                                <th scope="row">
+                                    <span class="status {{ document.getStatusColor() }}" aria-hidden="true"></span>
+                                    <a href="{{ document.getCpUrl() }}">{{ document.getTypeLabel() }}</a>
+                                </th>
+                                <td>{% if document.myobNumber %}<code>{{ document.myobNumber }}</code>{% endif %}</td>
+                                <td class="light">{{ document.getStatusLabel() }}</td>
+                            </tr>
+                            {% if document.lastError %}
+                                <tr>
+                                    <td colspan="3"><p class="error smalltext">{{ document.lastError }}</p></td>
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
 
-    {% if canPush %}
-        <div class="flex" style="gap: 6px; margin-top: 10px;">
-            <button type="button" class="btn small" data-my-push data-order-id="{{ order.id }}">
-                {{ invoice and invoice.isSynced() ? 'Push again'|t('my') : 'Push to MYOB'|t('my') }}
-            </button>
-            <button type="button" class="btn small" data-my-preview data-order-id="{{ order.id }}">
-                {{ 'Preview'|t('my') }}
-            </button>
-            <span data-my-result class="light" style="font-size: 11px;"></span>
+            {% if canPush %}
+                <div class="flex flex-wrap my-order-panel__actions">
+                    <button type="button" class="btn small" data-my-push data-order-id="{{ order.id }}">
+                        {{ invoice and invoice.isSynced() ? 'Push again'|t('my') : 'Push to MYOB'|t('my') }}
+                    </button>
+                    <button type="button" class="btn small" data-my-preview data-order-id="{{ order.id }}" aria-controls="my-order-payload" aria-expanded="false">
+                        {{ 'Preview'|t('my') }}
+                    </button>
+                </div>
+                <p data-my-result class="smalltext light" role="status" aria-live="polite"></p>
+
+                <pre id="my-order-payload" data-my-payload class="code smalltext hidden" tabindex="0" aria-label="{{ 'Preview'|t('my') }}"></pre>
+            {% endif %}
         </div>
+    </div>
+</fieldset>
 
-        <pre data-my-payload class="code hidden" style="max-height: 320px; overflow: auto; margin-top: 8px; font-size: 11px;"></pre>
-    {% endif %}
-</div>
+{% css %}
+    .my-order-panel { margin-block-start: var(--m); }
+    .my-order-panel__body { padding: var(--s) var(--m); }
+    .my-order-panel__body > :first-child { margin-block-start: 0; }
+    .my-order-panel__actions { gap: var(--xs); margin-block-start: var(--s); }
+    .my-order-panel [data-my-result]:empty { display: none; }
+    .my-order-panel [data-my-payload] { max-height: 320px; overflow: auto; margin-block-start: var(--s); }
+{% endcss %}
 
 {% js %}
 (function () {
-    var panel = document.currentScript ? document.currentScript.parentNode : document;
-
     var result = function (message, isError) {
         var el = document.querySelector('[data-my-result]');
         if (!el) return;
         el.textContent = message || '';
-        el.style.color = isError ? '#CF1124' : '';
+        el.classList.toggle('error', !!isError);
+        el.classList.toggle('light', !isError);
     };
 
     var pushButton = document.querySelector('[data-my-push]');
@@ -102,6 +131,7 @@
 
                 pre.textContent = 'POST ' + data.endpoint + '\n\n' + data.payload;
                 pre.classList.remove('hidden');
+                previewButton.setAttribute('aria-expanded', 'true');
             }).catch(function (error) {
                 previewButton.classList.remove('loading');
                 var data = (error && error.response && error.response.data) || {};

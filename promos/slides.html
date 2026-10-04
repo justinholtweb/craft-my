@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<!-- handmade: hand-tuned deck -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My — Plugin Store promos</title>
+<link rel="stylesheet" href="fonts.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --charcoal: #0f0f1a;
+    --charcoal-light: #1a1a2e;
+    --charcoal-lighter: #252540;
+    --accent: #4B1A60;
+    --accent-mid: #7A3E96;
+    --accent-light: #C9A6E0;
+    --gold: #ffd166;
+    --off-white: #f0f0f5;
+    --ok: #5ee0a0;
+    --bad: #ff6b6b;
+  }
+
+  html { background: #000; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: var(--off-white);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- slide shell ---------------------------------------------------- */
+  .slide {
+    position: relative;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 85% 15%, rgba(122, 62, 150, 0.42) 0%, transparent 40%),
+      radial-gradient(ellipse at 65% 5%,  rgba(201, 166, 224, 0.12) 0%, transparent 35%),
+      radial-gradient(ellipse at 15% 85%, rgba(255, 209, 102, 0.06) 0%, transparent 40%),
+      radial-gradient(ellipse at 35% 95%, rgba(122, 62, 150, 0.18) 0%, transparent 35%),
+      linear-gradient(135deg, #0f0f1a 0%, #140f1c 30%, #191121 60%, #0f0f1a 100%),
+      #0f0f1a;
+  }
+
+  /* Oversized watermark: the glyph from src/icon-mask.svg, with no tile. Anchored bottom-right,
+     running off the edge. */
+  .slide::after {
+    content: '';
+    position: absolute;
+    top: 30%;
+    right: -14%;
+    width: 1400px;
+    height: 1400px;
+    background: url('assets/watermark.svg') no-repeat right top / contain;
+    opacity: 0.035;
+    pointer-events: none;
+  }
+
+  /* The cover has the icon itself; a watermark behind it reads as its shadow. */
+  .cover::after { display: none; }
+
+  .slide::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 6px;
+    background: linear-gradient(90deg, var(--accent-mid), var(--accent-light), var(--gold), var(--accent-mid));
+    z-index: 5;
+  }
+
+  .inner {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    padding: 118px 130px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* ---- type ------------------------------------------------------------ */
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    font-size: 20px;
+    font-weight: 500;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(240, 240, 245, 0.62);
+    margin-bottom: 34px;
+  }
+  .eyebrow .rule {
+    width: 58px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--accent-light);
+  }
+
+  h1, h2 {
+    font-family: 'Jersey 20', sans-serif;
+    font-weight: 400;
+    line-height: 0.9;
+    letter-spacing: 0.005em;
+  }
+
+  /* The tile aubergine is far too dark to open a gradient on charcoal, so the text starts at a
+     mid violet. */
+  .gradient-text {
+    background: linear-gradient(100deg, #A77BC8 0%, #C9A6E0 38%, #ffd166 68%, #A77BC8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .lede {
+    font-size: 34px;
+    line-height: 1.5;
+    color: rgba(240, 240, 245, 0.72);
+  }
+
+  code, .code, .mono { font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace; }
+
+  /* ---- cover ----------------------------------------------------------- */
+  .cover .inner { gap: 90px; }
+  .cover .copy { flex: 1 1 auto; }
+  .cover h1 { font-size: 220px; margin-bottom: 18px; }
+  .cover .tagline {
+    font-size: 50px;
+    line-height: 1.25;
+    color: rgba(240, 240, 245, 0.82);
+    margin-bottom: 22px;
+    max-width: 960px;
+  }
+  .cover .lede { font-size: 30px; max-width: 980px; margin-bottom: 46px; color: rgba(240,240,245,0.6); }
+  .cover .badges { display: flex; gap: 18px; align-items: center; }
+  .badge {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 14px 26px;
+    border-radius: 999px;
+    border: 2px solid rgba(201, 166, 224, 0.45);
+    color: rgba(240, 240, 245, 0.85);
+  }
+  .badge.price { background: var(--accent); border-color: var(--accent-light); color: #fff; }
+  .cover .mark { flex: 0 0 auto; }
+  .cover .mark img { width: 420px; height: 420px; display: block; filter: drop-shadow(0 30px 60px rgba(0,0,0,0.45)); }
+
+  /* ---- feature slides -------------------------------------------------- */
+  .feature .copy { flex: 0 0 auto; }
+  .feature h2 { font-size: 96px; margin-bottom: 30px; }
+
+  .points { list-style: none; margin-top: 40px; display: flex; flex-direction: column; gap: 20px; }
+  .points li {
+    display: flex;
+    gap: 16px;
+    font-size: 25px;
+    line-height: 1.4;
+    color: rgba(240, 240, 245, 0.66);
+  }
+  .points li svg { flex: 0 0 auto; margin-top: 4px; }
+  .points code { font-size: 22px; color: var(--accent-light); }
+
+  /* ---- light Craft 5 CP frame -------------------------------------------
+     Every string inside one is a translation key, a column heading or a label from
+     src/templates/, or a model label from src/models/. */
+  .cpframe {
+    position: absolute; right: 100px; top: 50%; transform: translateY(-50%); z-index: 3;
+    width: 1040px; border-radius: 14px; overflow: hidden; background: #e4e9f0;
+    border: 1px solid rgba(255,255,255,0.10);
+    box-shadow: 0 40px 90px rgba(0,0,0,0.55), 0 6px 18px rgba(0,0,0,0.35);
+  }
+  .cpframe .chrome { display: flex; align-items: center; gap: 9px; padding: 13px 18px; background: linear-gradient(180deg, #2a2a3d 0%, #21212f 100%); }
+  .cpframe .chrome b { width: 12px; height: 12px; border-radius: 50%; }
+  .cpframe .chrome b:nth-child(1) { background: #ff5f57; }
+  .cpframe .chrome b:nth-child(2) { background: #febc2e; }
+  .cpframe .chrome b:nth-child(3) { background: #28c840; }
+  .cpframe .chrome em { margin-left: 12px; font-style: normal; font-size: 18px; color: rgba(240,240,245,0.55); }
+  .cpframe .body { padding: 26px; }
+  .cp-title { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 18px; }
+  .cp-title h3 { font-size: 30px; font-weight: 700; color: #1f2933; }
+  .cp-btn { display: inline-block; font-size: 18px; font-weight: 500; color: #3f4d5a; background: #dfe5ec; border-radius: 6px; padding: 10px 18px; white-space: nowrap; }
+  .cp-btn.caution { color: #cf1124; }
+  .cp-btn.small { font-size: 16px; padding: 7px 14px; }
+  .cp-pane { background: #fff; border-radius: 8px; box-shadow: 0 0 0 1px rgba(31,41,51,0.1), 0 2px 12px rgba(31,41,51,0.08); padding: 26px 28px; color: #3f4d5a; }
+  .cp-pane + .cp-pane, .cp-pane + .cp-field, .cp-field + .cp-pane { margin-top: 18px; }
+  .cp-pane h4 { font-size: 24px; font-weight: 700; color: #1f2933; margin-bottom: 16px; }
+  .cp-pane p { font-size: 20px; line-height: 1.45; }
+  .cp-light { color: #6b7783; }
+  .cp-legend { font-size: 15px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #606d7b; margin-bottom: 12px; }
+  .cp-table { width: 100%; border-collapse: collapse; font-size: 19px; }
+  .cp-table th { text-align: left; font-weight: 600; color: #5f6c7b; background: #f3f6f9; padding: 11px 12px; border-bottom: 1px solid #e3e8ee; white-space: nowrap; }
+  .cp-table tbody th { background: transparent; color: #33404c; font-weight: 400; border-bottom: 1px solid #eef1f4; padding: 13px 12px; }
+  .cp-table td { padding: 13px 12px; border-bottom: 1px solid #eef1f4; color: #33404c; vertical-align: top; }
+  .cp-table tr:last-child td, .cp-table tr:last-child th { border-bottom: 0; }
+  .cp-table .nowrap { white-space: nowrap; }
+  .cp-table tbody th { vertical-align: top; }
+  .cp-table.log { font-size: 16px; }
+  .cp-table.log th, .cp-table.log td { padding: 11px 9px; }
+  .cp-table.log code { font-size: 15px; }
+  .cp-table a, .cp-link { color: #2563d4; text-decoration: none; }
+  .cp-table code { font-size: 17px; color: #33404c; }
+  .cp-dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+  .cp-dot.green { background: #27ab83; }
+  .cp-dot.orange { background: #f2a60d; }
+  .cp-dot.red { background: #cf1124; }
+  .cp-select { display: inline-flex; align-items: center; gap: 14px; font-size: 18px; color: #33404c; background: #fff; border: 1px solid #cdd8e4; border-radius: 6px; padding: 8px 14px; }
+  .cp-select::after { content: '▾'; color: #7b8793; font-size: 15px; }
+  .cp-row-hl td, .cp-row-hl th { background: #f6effa !important; }
+  .cp-error { color: #cf1124; }
+  .cp-pre { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 15.5px; line-height: 1.45; color: #33404c; background: #f3f6f9; border: 1px solid #e3e8ee; border-radius: 6px; padding: 14px 18px; white-space: pre; overflow: hidden; position: relative; }
+  .cp-pre.clip::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 70px; background: linear-gradient(180deg, rgba(243,246,249,0) 0%, #f3f6f9 90%); }
+  .cp-pre .k { color: #6a2d86; }
+  .cp-pre .s { color: #1d7a4d; }
+  .cp-pre .n { color: #a5520b; }
+
+  /* settings fields */
+  .cp-field { margin-top: 20px; }
+  .cp-field:first-child { margin-top: 0; }
+  .cp-field label { display: block; font-size: 20px; font-weight: 700; color: #1f2933; }
+  .cp-field .inst { font-size: 17px; color: #6b7783; margin-top: 4px; line-height: 1.4; }
+  .cp-input { margin-top: 10px; font-size: 19px; color: #33404c; background: #f3f6f9; border: 1px solid #cdd8e4; border-radius: 6px; padding: 11px 14px; }
+  .cp-input.code { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 18px; }
+  .cp-input.copy { display: flex; align-items: center; justify-content: space-between; background: #fbf8fd; border: 2px solid #C9A6E0; box-shadow: 0 0 0 4px rgba(201,166,224,0.25); color: #1f2933; }
+  .cp-input.copy i { font-style: normal; font-family: 'Inter', sans-serif; font-size: 15px; color: #6b7783; }
+  .cp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .cp-status { display: flex; align-items: center; gap: 12px; font-size: 20px; }
+  .cp-status strong { color: #1f2933; }
+  .cp-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+  /* dark code box */
+  .codebox {
+    border-radius: 14px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.09); background: rgba(12,12,20,0.88);
+    box-shadow: 0 40px 90px rgba(0,0,0,0.5);
+  }
+  .codebox .tab { padding: 12px 22px; font-size: 17px; color: rgba(240,240,245,0.55); border-bottom: 1px solid rgba(255,255,255,0.07); font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; }
+  .codebox pre { padding: 18px 24px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 18px; line-height: 1.5; color: rgba(240,240,245,0.85); }
+  .codebox .k { color: var(--accent-light); }
+  .codebox .s { color: #a5e3a0; }
+  .codebox .n { color: var(--gold); }
+  .codebox .c { color: rgba(240,240,245,0.38); }
+
+  /* reconciliation (slide 4) */
+  .recon { position: absolute; right: 100px; top: 50%; transform: translateY(-50%); z-index: 3; width: 1040px; }
+  .tally { border-radius: 16px; border: 1px solid rgba(255,255,255,0.09); background: rgba(15,15,26,0.82); padding: 28px 34px; box-shadow: 0 40px 90px rgba(0,0,0,0.45); }
+  .tally .hd { display: flex; align-items: baseline; justify-content: space-between; font-size: 18px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; color: rgba(240,240,245,0.5); margin-bottom: 14px; }
+  .tally .hd code { letter-spacing: 0; text-transform: none; font-size: 18px; color: var(--accent-light); }
+  .tally .row { display: flex; align-items: baseline; gap: 18px; padding: 10px 0; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size: 22px; }
+  .tally .row .src { flex: 0 0 150px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 17px; color: rgba(240,240,245,0.42); }
+  .tally .row .d { flex: 1 1 auto; color: rgba(240,240,245,0.82); }
+  .tally .row .a { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 22px; color: var(--off-white); }
+  .tally .row .a.neg { color: var(--accent-light); }
+  .tally .sum { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 20px; }
+  .tally .sum div { border-radius: 12px; border: 1px solid rgba(201,166,224,0.3); background: rgba(122,62,150,0.16); padding: 14px 18px; }
+  .tally .sum code { display: block; font-size: 17px; color: rgba(240,240,245,0.55); margin-bottom: 4px; }
+  .tally .sum b { font-family: 'Jersey 20', sans-serif; font-weight: 400; font-size: 54px; line-height: 1; color: var(--off-white); }
+  .tally .sum small { display: block; font-size: 15px; color: rgba(240,240,245,0.45); margin-top: 4px; }
+  .tally .sum .ok { border-color: rgba(94,224,160,0.4); background: rgba(94,224,160,0.10); }
+  .tally .sum .ok b { color: var(--ok); }
+  .never { display: flex; align-items: center; gap: 12px; margin-top: 18px; font-size: 19px; color: rgba(240,240,245,0.55); flex-wrap: wrap; }
+  .never s { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 18px; text-decoration-color: var(--bad); text-decoration-thickness: 2px; color: rgba(240,240,245,0.7); background: rgba(255,107,107,0.08); border: 1px solid rgba(255,107,107,0.3); padding: 4px 10px; border-radius: 6px; }
+  .refuse { margin-top: 18px; border-radius: 16px; border: 1px solid rgba(255,107,107,0.35); background: rgba(40,14,22,0.82); padding: 22px 30px; }
+  .refuse .lbl { font-size: 16px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; color: var(--bad); margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+  .refuse .lbl i { width: 11px; height: 11px; border-radius: 50%; background: currentColor; }
+  .refuse p { font-size: 21px; line-height: 1.45; color: rgba(240,240,245,0.86); }
+
+  /* refunds (slide 6) */
+  .stack { position: absolute; right: 100px; top: 50%; transform: translateY(-50%); z-index: 3; width: 1060px; display: flex; flex-direction: column; gap: 22px; }
+  .stack .cpframe { position: static; transform: none; width: 100%; }
+  .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch; gap: 0; }
+  .flow .step { border-radius: 14px; border: 1px solid rgba(255,255,255,0.09); background: rgba(15,15,26,0.82); padding: 18px 20px; }
+  .flow .step .t { font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; color: rgba(240,240,245,0.5); }
+  .flow .step code { display: block; margin-top: 8px; font-size: 17px; color: var(--accent-light); }
+  .flow .step b { display: block; margin-top: 6px; font-family: 'Jersey 20', sans-serif; font-weight: 400; font-size: 46px; line-height: 1; color: var(--off-white); }
+  .flow .step b.neg { color: var(--accent-light); }
+  .flow .step small { display: block; margin-top: 6px; font-size: 16px; color: rgba(240,240,245,0.5); line-height: 1.35; }
+  .flow .arrow { display: flex; align-items: center; padding: 0 10px; color: rgba(201,166,224,0.7); font-size: 30px; }
+
+  /* ledger extras (slide 5) */
+  .counts { display: flex; gap: 28px; margin: 0 4px 16px; font-size: 19px; color: #33404c; }
+  .counts strong { color: #1f2933; }
+
+  /* ---- footer lockup --------------------------------------------------- */
+  .footer {
+    position: absolute;
+    left: 130px;
+    bottom: 54px;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 22px;
+    color: rgba(240, 240, 245, 0.42);
+  }
+  .footer img { width: 40px; height: 40px; border-radius: 9px; }
+  .footer b { color: rgba(240, 240, 245, 0.72); font-weight: 600; }
+
+  /* Only render the requested slide when screenshotting */
+  body.single .slide { display: none; }
+  body.single .slide.active { display: block; }
+</style>
+</head>
+<body>
+
+<!-- 1 · Cover ============================================================ -->
+<section class="slide cover" data-n="1">
+  <div class="inner">
+    <div class="copy">
+      <div class="eyebrow"><span class="rule"></span> Craft Commerce 5 · MYOB</div>
+      <h1 class="gradient-text">My</h1>
+      <p class="tagline">MYOB for Craft Commerce.</p>
+      <p class="lede">A completed order becomes a sale invoice in MYOB, against a real customer card, with the payment applied and a credit note raised if it is later refunded.</p>
+      <div class="badges">
+        <span class="badge price">$99 · then $79/yr</span>
+        <span class="badge">Craft 5.3+ · Commerce 5 · PHP 8.2+</span>
+      </div>
+    </div>
+    <div class="mark"><img src="assets/icon.svg" alt=""></div>
+  </div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>My</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-my</div>
+</section>
+
+<!-- 2 · Connect ========================================================== -->
+<section class="slide feature" data-n="2">
+  <div class="inner">
+    <div class="copy" style="width: 590px;">
+      <div class="eyebrow"><span class="rule"></span> Connect</div>
+      <h2 style="font-size: 88px;">The cloud, or<br>the back office</h2>
+      <p class="lede" style="max-width: 580px; font-size: 30px;">MYOB's cloud API over OAuth 2, or an AccountRight server on your own network.</p>
+      <ul class="points">
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Tokens refresh every 20 minutes and live in the database, not in project config</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Newer API keys can't list company files, so there's always a plain field for the file ID</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>The company file login is not your MYOB login. My says which to check when MYOB returns a 401</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="cpframe" style="width: 1040px;">
+    <div class="chrome"><b></b><b></b><b></b><em>Settings → Plugins → My</em></div>
+    <div class="body">
+      <div class="cp-title"><h3>Connection</h3></div>
+      <div class="cp-pane" style="padding: 22px 26px;">
+        <div class="cp-status"><span class="cp-dot green" style="margin-right: 0;"></span><strong>Connected to Fitzroy Knitwear Pty Ltd</strong><span class="cp-light" style="font-size: 18px;">Last checked 3/10/26, 9:12 am</span></div>
+        <div class="cp-row" style="margin-top: 16px;">
+          <span class="cp-btn">Reconnect</span><span class="cp-btn">Test connection</span><span class="cp-btn caution">Disconnect</span>
+          <span class="cp-light" style="font-size: 17px; margin-left: 6px;">Connected to Fitzroy Knitwear Pty Ltd as Administrator.</span>
+        </div>
+      </div>
+      <div class="cp-field" style="margin: 20px 4px 0;">
+        <label>Where MYOB lives</label>
+        <div class="inst">Cloud files are reached over the internet with OAuth. A local AccountRight server runs on the merchant’s own machine and uses the company file login directly.</div>
+        <div style="margin-top: 10px;"><span class="cp-select">MYOB cloud (AccountRight Live / MYOB Business)</span></div>
+      </div>
+      <div class="cp-pane" style="margin-top: 18px; padding: 22px 26px;">
+        <div class="cp-field">
+          <label>Redirect URL</label>
+          <div class="inst">Create an app at <span class="cp-link">developer.myob.com</span> and register this redirect URL against it, exactly as printed — MYOB matches it character for character.</div>
+          <div class="cp-input code copy"><span>https://fitzroyknitwear.com.au/actions/my/oauth/callback</span></div>
+        </div>
+      </div>
+      <div class="cp-pane" style="padding: 22px 26px;">
+        <p style="font-size: 18px; margin-bottom: 14px;">These are the login for the <b style="color:#1f2933;">company file itself</b>, not for your MYOB account. They are two different things and MYOB rejects both with the same 401.</p>
+        <div class="cp-grid">
+          <div class="cp-field">
+            <label>Company file username</label>
+            <div class="inst">Usually <code style="font-size: 15px; background:#eef1f4; padding: 1px 5px; border-radius: 4px;">Administrator</code>.</div>
+            <div class="cp-input code">Administrator</div>
+          </div>
+          <div class="cp-field" style="margin-top: 0;">
+            <label>Company file password</label>
+            <div class="inst">Leave blank if the file has no password.</div>
+            <div class="cp-input code">$MYOB_CF_PASSWORD</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>My</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-my</div>
+</section>
+
+<!-- 3 · The order panel and Preview ====================================== -->
+<section class="slide feature" data-n="3">
+  <div class="inner">
+    <div class="copy" style="width: 590px;">
+      <div class="eyebrow"><span class="rule"></span> On the order</div>
+      <h2>See it before<br>MYOB does</h2>
+      <p class="lede" style="max-width: 580px; font-size: 30px;">Preview prints the exact invoice a push would send, built by the same code the queue job runs.</p>
+      <ul class="points">
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Pushes are queued, so a MYOB outage delays an invoice, not a customer's payment</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Customers found by email first, so the file doesn't end up with two of everybody</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Service or Item layout, and Commerce tax categories mapped to MYOB codes like <code>GST</code></span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="cpframe" style="width: 1040px;">
+    <div class="chrome"><b></b><b></b><b></b><em>Commerce → Orders → 1042</em></div>
+    <div class="body">
+      <div class="cp-pane" style="padding: 22px 26px;">
+        <div class="cp-legend">MYOB</div>
+        <table class="cp-table">
+          <tbody>
+            <tr><th><span class="cp-dot green"></span><a>Invoice</a></th><td><code>WEB1042</code></td><td class="cp-light">Synced</td></tr>
+            <tr><th><span class="cp-dot green"></span><a>Payment</a></th><td></td><td class="cp-light">Synced</td></tr>
+          </tbody>
+        </table>
+        <div class="cp-row" style="margin-top: 16px;"><span class="cp-btn small">Push again</span><span class="cp-btn small">Preview</span></div>
+        <p class="cp-light" style="font-size: 16px; margin-top: 12px;">Totals agree.</p>
+        <div class="cp-pre clip" style="margin-top: 12px; height: 560px;">POST Sale/Invoice/Service
+
+{
+    <span class="k">"Customer"</span>: {
+        <span class="k">"UID"</span>: <span class="s">"5c1d7e0a-93b2-4f6e-a8d1-2b7c94e0f3a6"</span>
+    },
+    <span class="k">"Date"</span>: <span class="s">"2026-10-03T00:00:00"</span>,
+    <span class="k">"IsTaxInclusive"</span>: <span class="n">true</span>,
+    <span class="k">"Lines"</span>: [
+        {
+            <span class="k">"Type"</span>: <span class="s">"Transaction"</span>,
+            <span class="k">"Description"</span>: <span class="s">"2 × Merino crew jumper (MCJ-NAVY-M)"</span>,
+            <span class="k">"Total"</span>: <span class="n">178</span>,
+            <span class="k">"TaxCode"</span>: {
+                <span class="k">"UID"</span>: <span class="s">"3e8b2d41-6c0f-4a97-b1e5-0d9f7a2c6b84"</span>
+            },
+            <span class="k">"Account"</span>: {
+                <span class="k">"UID"</span>: <span class="s">"a71f09c3-2e5d-4b8a-9c64-f3d1e8b7a205"</span>
+            }
+        },
+        {
+            <span class="k">"Type"</span>: <span class="s">"Transaction"</span>,
+            <span class="k">"Description"</span>: <span class="s">"Wool wash 250 ml (WW-250)"</span>,
+            <span class="k">"Total"</span>: <span class="n">14.95</span>,
+            <span class="k">"TaxCode"</span>: {</div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>My</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-my</div>
+</section>
+
+<!-- 4 · MYOB books what the customer paid ================================ -->
+<section class="slide feature" data-n="4">
+  <div class="inner">
+    <div class="copy" style="width: 590px;">
+      <div class="eyebrow"><span class="rule"></span> Reconciliation</div>
+      <h2 style="font-size: 88px;">MYOB books<br>what the<br>customer paid</h2>
+      <p class="lede" style="max-width: 580px; font-size: 30px;">The payload never states a total. My adds it up anyway, and refuses to push if it's out by more than a cent.</p>
+      <ul class="points">
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Checked again against what MYOB actually booked, which catches a tax code mapped to the wrong rate</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Lines come from Commerce's own arithmetic, so third-party surcharges are never dropped</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="recon">
+    <div class="tally">
+      <div class="hd"><span>Order 1042 · before the push</span><code>Invoices::reconcile()</code></div>
+      <div class="row"><span class="src">Lines[0]</span><span class="d">2 × Merino crew jumper (MCJ-NAVY-M)</span><span class="a">178.00</span></div>
+      <div class="row"><span class="src">Lines[1]</span><span class="d">Wool wash 250 ml (WW-250)</span><span class="a">14.95</span></div>
+      <div class="row"><span class="src">Lines[2]</span><span class="d">Discount</span><span class="a neg">−10.00</span></div>
+      <div class="row" style="border-bottom: 0;"><span class="src">Freight</span><span class="d">Shipping</span><span class="a">12.00</span></div>
+      <div class="sum">
+        <div><code>computed</code><b>194.95</b><small>what the invoice will book</small></div>
+        <div><code>expected</code><b>194.95</b><small>Order::getTotalPrice()</small></div>
+        <div class="ok"><code>diffMinor</code><b>0</b><small>Totals agree.</small></div>
+      </div>
+      <div class="never">Never sent, so they can't disagree with the lines: <s>Subtotal</s> <s>TotalTax</s> <s>TotalAmount</s></div>
+    </div>
+    <div class="refuse">
+      <div class="lbl"><i></i> If they ever disagree</div>
+      <p>The invoice would book 191.95 but the order is 194.95. Nothing was sent. Check the tax code mapping, or set “when totals disagree” to add a rounding line.</p>
+    </div>
+  </div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>My</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-my</div>
+</section>
+
+<!-- 5 · The sync ledger ================================================== -->
+<section class="slide feature" data-n="5">
+  <div class="inner">
+    <div class="copy" style="width: 540px;">
+      <div class="eyebrow"><span class="rule"></span> The sync ledger</div>
+      <h2 style="font-size: 88px;">Nothing is<br>entered twice</h2>
+      <p class="lede" style="max-width: 530px; font-size: 30px;">One invoice per order, one payment per transaction. Retry all you like.</p>
+      <ul class="points">
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Each row is claimed before the request, not after</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>A row left <code>pending</code> asks MYOB whether the invoice landed before posting it again</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>The order reference rides on every invoice, so a human can always match them up</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="cpframe" style="width: 1120px;">
+    <div class="chrome"><b></b><b></b><b></b><em>MYOB → Documents</em></div>
+    <div class="body">
+      <div class="cp-title"><h3>MYOB documents</h3>
+        <div class="cp-row"><span class="cp-select">All types</span><span class="cp-select">All statuses</span></div>
+      </div>
+      <div class="counts">
+        <span><span class="cp-dot green"></span><strong>1,286</strong> <span class="cp-light">Synced</span></span>
+        <span><span class="cp-dot orange"></span><strong>1</strong> <span class="cp-light">Pending</span></span>
+        <span><span class="cp-dot red"></span><strong>1</strong> <span class="cp-light">Failed</span></span>
+      </div>
+      <div class="cp-pane" style="padding: 8px 10px;">
+        <table class="cp-table">
+          <thead><tr><th>Type</th><th>Order</th><th>MYOB number</th><th>Amount</th><th>Status</th><th>Updated</th></tr></thead>
+          <tbody>
+            <tr class="cp-row-hl"><th><a>Credit refund</a></th><td><a>#1042</a></td><td><code>CD000412</code></td><td class="nowrap">-89.00 AUD</td><td class="nowrap"><span class="cp-dot green"></span>Synced</td><td class="cp-light nowrap">6/10/26, 2:31 pm</td></tr>
+            <tr class="cp-row-hl"><th><a>Credit note</a></th><td><a>#1042</a></td><td><code>WEBCR1042</code></td><td class="nowrap">-89.00 AUD</td><td class="nowrap"><span class="cp-dot green"></span>Synced</td><td class="cp-light nowrap">6/10/26, 2:31 pm</td></tr>
+            <tr><th><a>Invoice</a></th><td><a>#1047</a></td><td><code>WEB1047</code></td><td class="nowrap">64.95 AUD</td><td class="nowrap"><span class="cp-dot green"></span>Synced</td><td class="cp-light nowrap">6/10/26, 11:05 am</td></tr>
+            <tr><th><a>Invoice</a></th><td><a>#1046</a></td><td><span class="cp-light">Not assigned</span></td><td class="nowrap">312.40 AUD</td><td class="nowrap"><span class="cp-dot orange"></span>Pending <span class="cp-light">(2 attempts)</span></td><td class="cp-light nowrap">6/10/26, 10:48 am</td></tr>
+            <tr><th><a>Payment</a></th><td><a>#1045</a></td><td><span class="cp-light">Not assigned</span></td><td class="nowrap">129.00 AUD</td><td class="nowrap"><span class="cp-dot green"></span>Synced</td><td class="cp-light nowrap">5/10/26, 4:17 pm</td></tr>
+            <tr><th><a>Invoice</a></th><td><a>#1045</a></td><td><code>WEB1045</code></td><td class="nowrap">129.00 AUD</td><td class="nowrap"><span class="cp-dot green"></span>Synced <span class="cp-light">(2 attempts)</span></td><td class="cp-light nowrap">5/10/26, 4:17 pm</td></tr>
+            <tr class="cp-row-hl"><th><a>Payment</a></th><td><a>#1042</a></td><td><span class="cp-light">Not assigned</span></td><td class="nowrap">194.95 AUD</td><td class="nowrap"><span class="cp-dot green"></span>Synced</td><td class="cp-light nowrap">3/10/26, 9:14 am</td></tr>
+            <tr class="cp-row-hl"><th><a>Invoice</a></th><td><a>#1042</a></td><td><code>WEB1042</code></td><td class="nowrap">194.95 AUD</td><td class="nowrap"><span class="cp-dot green"></span>Synced</td><td class="cp-light nowrap">3/10/26, 9:14 am</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>My</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-my</div>
+</section>
+
+<!-- 6 · Refunds become credit notes ====================================== -->
+<section class="slide feature" data-n="6">
+  <div class="inner">
+    <div class="copy" style="width: 560px;">
+      <div class="eyebrow"><span class="rule"></span> Refunds</div>
+      <h2 style="font-size: 88px;">Refunds<br>become credit<br>notes</h2>
+      <p class="lede" style="max-width: 550px; font-size: 30px;">A Commerce refund becomes a MYOB credit note: an invoice with negative amounts.</p>
+      <ul class="points">
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Leave the credit on the customer's account, or record the money going back out</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Partial refunds are credited at the tax treatment the order was charged</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>A second refund on the same order is <code>CR2-</code>, never a clash</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="stack">
+    <div class="cpframe">
+      <div class="chrome"><b></b><b></b><b></b><em>Commerce → Orders → 1042</em></div>
+      <div class="body">
+        <div class="cp-pane" style="padding: 22px 26px;">
+          <div class="cp-legend">MYOB</div>
+          <table class="cp-table">
+            <tbody>
+              <tr><th><span class="cp-dot green"></span><a>Invoice</a></th><td><code>WEB1042</code></td><td class="cp-light">Synced</td></tr>
+              <tr><th><span class="cp-dot green"></span><a>Payment</a></th><td></td><td class="cp-light">Synced</td></tr>
+              <tr class="cp-row-hl"><th><span class="cp-dot green"></span><a>Credit note</a></th><td><code>WEBCR1042</code></td><td class="cp-light">Synced</td></tr>
+              <tr class="cp-row-hl"><th><span class="cp-dot green"></span><a>Credit refund</a></th><td><code>CD000412</code></td><td class="cp-light">Synced</td></tr>
+            </tbody>
+          </table>
+          <div class="cp-row" style="margin-top: 16px;"><span class="cp-btn small">Push again</span><span class="cp-btn small">Preview</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="codebox">
+      <div class="tab">POST Sale/Invoice/Service · credit note WEBCR1042</div>
+<pre style="font-size: 16.5px; line-height: 1.42; padding: 14px 24px;">{
+<span class="c">    …</span>
+    <span class="k">"IsTaxInclusive"</span>: <span class="n">true</span>,
+    <span class="k">"Lines"</span>: [
+        {
+            <span class="k">"Type"</span>: <span class="s">"Transaction"</span>,
+            <span class="k">"Description"</span>: <span class="s">"Partial refund of order 1042"</span>,
+            <span class="k">"Total"</span>: <span class="n">-89</span>,
+<span class="c">            …Account, TaxCode</span>
+        }
+    ],
+<span class="c">    …</span>
+    <span class="k">"Number"</span>: <span class="s">"WEBCR1042"</span>,
+<span class="c">    …</span>
+}</pre>
+    </div>
+  </div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>My</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-my</div>
+</section>
+
+<!-- 7 · The connection log =============================================== -->
+<section class="slide feature" data-n="7">
+  <div class="inner">
+    <div class="copy" style="width: 450px;">
+      <div class="eyebrow"><span class="rule"></span> Connection log</div>
+      <h2 style="font-size: 88px;">Every<br>request, on<br>a screen</h2>
+      <p class="lede" style="max-width: 450px; font-size: 30px;">Payloads both ways, with MYOB's own reason when it says no.</p>
+      <ul class="points">
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Tokens and secrets become <code>[redacted]</code> before anything is written</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C9A6E0" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Throttled under MYOB's 8 requests a second; <code>Retry-After</code> honoured</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="cpframe" style="width: 1250px; right: 70px;">
+    <div class="chrome"><b></b><b></b><b></b><em>MYOB → Log</em></div>
+    <div class="body">
+      <div class="cp-title"><h3>MYOB log</h3>
+        <div class="cp-row"><span class="cp-select">All actions</span><span class="cp-select">All levels</span></div>
+      </div>
+      <div class="cp-pane" style="padding: 8px 10px;">
+        <table class="cp-table log">
+          <thead><tr><th>When</th><th>Level</th><th>Action</th><th>Request</th><th>Code</th><th>Time</th><th>Summary</th></tr></thead>
+          <tbody>
+            <tr><th class="nowrap"><a>3/10/26, 9:14 am</a></th><td class="nowrap"><span class="cp-dot green"></span>Info</td><td>payment.create</td><td><code>POST /Sale/CustomerPayment</code></td><td>201</td><td class="cp-light nowrap">388 ms</td><td>OK (201)</td></tr>
+            <tr><th class="nowrap"><a>3/10/26, 9:14 am</a></th><td class="nowrap"><span class="cp-dot green"></span>Info</td><td>invoice.create</td><td><code>POST /Sale/Invoice/Service</code></td><td>201</td><td class="cp-light nowrap">642 ms</td><td>OK (201)</td></tr>
+            <tr><th class="nowrap"><a>3/10/26, 9:14 am</a></th><td class="nowrap"><span class="cp-dot orange"></span>Warning</td><td>invoice.create</td><td><code>POST /Sale/Invoice/Service</code></td><td>503</td><td class="cp-light nowrap">91 ms</td><td>Retrying in 2s (attempt 2)</td></tr>
+            <tr><th class="nowrap"><a>3/10/26, 9:14 am</a></th><td class="nowrap"><span class="cp-dot green"></span>Info</td><td>contact.create</td><td><code>POST /Contact/Customer</code></td><td>201</td><td class="cp-light nowrap">455 ms</td><td>OK (201)</td></tr>
+            <tr><th class="nowrap"><a>3/10/26, 9:14 am</a></th><td class="nowrap"><span class="cp-dot green"></span>Info</td><td>contact.find</td><td><code>GET /Contact/Customer</code></td><td>200</td><td class="cp-light nowrap">231 ms</td><td>0 records</td></tr>
+            <tr class="cp-row-hl"><th class="nowrap"><a>3/10/26, 9:13 am</a></th><td class="nowrap"><span class="cp-dot green"></span>Info</td><td>oauth.refresh</td><td><code>POST https://secure.myob.com/oauth2/v1/authorize</code></td><td>200</td><td class="cp-light nowrap">412 ms</td><td>Token issued, valid 1200s</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="cp-pane" style="padding: 18px 24px;">
+        <div style="font-size: 18px; font-weight: 700; color: #1f2933; margin-bottom: 10px;">Response <span class="cp-light" style="font-weight: 400; font-size: 16px;">· oauth.refresh — 3/10/26, 9:13 am</span></div>
+        <div class="cp-pre" style="white-space: pre-wrap; word-break: break-all; font-size: 16px;">{<span class="k">"access_token"</span>:<span class="s">"<b style="color:#6a2d86;">[redacted]</b>"</span>,<span class="k">"token_type"</span>:<span class="s">"bearer"</span>,<span class="k">"expires_in"</span>:<span class="s">"1200"</span>,<span class="k">"refresh_token"</span>:<span class="s">"<b style="color:#6a2d86;">[redacted]</b>"</span>,<span class="k">"scope"</span>:<span class="s">"CompanyFile"</span>,<span class="k">"user"</span>:{<span class="k">"uid"</span>:<span class="s">"b8f2c6a1-4d3e-4f0a-9e7b-15c2d8a6f314"</span>,<span class="k">"username"</span>:<span class="s">"accounts@fitzroyknitwear.com.au"</span>}}</div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>My</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-my</div>
+</section>
+
+<script>
+  var n = new URLSearchParams(location.search).get('s');
+  if (n) {
+    document.body.classList.add('single');
+    var el = document.querySelector('.slide[data-n="' + n + '"]');
+    if (el) el.classList.add('active');
+  }
+</script>
+</body>
+</html>

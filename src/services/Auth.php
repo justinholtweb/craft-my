@@ -187,9 +187,14 @@ class Auth extends Component
      * replaced. Whoever loses the race re-reads the row — by then it holds the fresh token — and
      * only refreshes for real if it is *still* expired.
      *
+     * `$force` refreshes a token that has not reached its expiry — after MYOB answered 401 to it,
+     * or when asked to from the console. `$rejectedToken` is the token that got the 401: if the
+     * stored token is no longer that one, another process has already refreshed and its token is
+     * used as is. Refreshing again would rotate the refresh token out from under that process.
+     *
      * @throws MyobApiException
      */
-    public function refresh(): Connection
+    public function refresh(bool $force = false, ?string $rejectedToken = null): Connection
     {
         $mutex = Craft::$app->getMutex();
         $acquired = $mutex->acquire(self::MUTEX_KEY, self::MUTEX_TIMEOUT);
@@ -199,7 +204,14 @@ class Auth extends Component
             $this->_connection = null;
             $connection = $this->getConnection();
 
-            if (!$connection->isExpired()) {
+            if ($connection->isLocal()) {
+                // A local server has no tokens to refresh.
+                return $connection;
+            }
+
+            $alreadyReplaced = $rejectedToken !== null && $connection->accessToken !== $rejectedToken;
+
+            if (!$connection->isExpired() && (!$force || $alreadyReplaced)) {
                 return $connection;
             }
 
@@ -289,6 +301,10 @@ class Auth extends Component
      */
     public function selectCompanyFile(string $id, ?string $uri = null, ?string $name = null): Connection
     {
+        if ($uri !== null && $uri !== '' && !$this->isAcceptableCompanyFileUri($uri)) {
+            throw new MyobApiException(Craft::t('my', 'That company file address is not a MYOB address, so it was not saved.'));
+        }
+
         $connection = $this->getConnection();
         $connection->companyFileId = $id;
         $connection->companyFileUri = $uri ?: null;
@@ -300,6 +316,50 @@ class Auth extends Component
         $this->verify();
 
         return $this->getConnection();
+    }
+
+    /**
+     * Whether a company file URI may be stored.
+     *
+     * Every request carries the bearer token, the developer key and the company file credentials
+     * to this URI, and it arrives in POST data from the settings screen — so it is not trusted
+     * merely because MYOB's file list is where it usually comes from. In cloud mode it must be
+     * HTTPS on a `myob.com` host; in local mode the merchant already chose the server, so it must
+     * at least be HTTP(S) on that same host and port.
+     */
+    public function isAcceptableCompanyFileUri(string $uri): bool
+    {
+        $parts = parse_url($uri);
+
+        if (!is_array($parts) || empty($parts['host']) || empty($parts['scheme'])) {
+            return false;
+        }
+
+        $scheme = strtolower($parts['scheme']);
+        $host = strtolower($parts['host']);
+
+        if (isset($parts['user']) || isset($parts['pass'])) {
+            return false;
+        }
+
+        $settings = Plugin::getInstance()->getSettings();
+
+        if (!$settings->isLocal()) {
+            return $scheme === 'https' && ($host === 'myob.com' || str_ends_with($host, '.myob.com'));
+        }
+
+        $base = parse_url($settings->getApiBaseUrl());
+
+        if (!is_array($base) || empty($base['host'])) {
+            return false;
+        }
+
+        $defaultPort = static fn(string $s): int => $s === 'https' ? 443 : 80;
+        $baseScheme = strtolower((string)($base['scheme'] ?? 'http'));
+
+        return in_array($scheme, ['http', 'https'], true)
+            && $host === strtolower($base['host'])
+            && ($parts['port'] ?? $defaultPort($scheme)) === ($base['port'] ?? $defaultPort($baseScheme));
     }
 
     /**
@@ -476,6 +536,9 @@ class Auth extends Component
     {
         return Craft::createGuzzleClient([
             'timeout' => Plugin::getInstance()->getSettings()->timeout,
+            // The form body carries the client secret and the refresh token; a 307 must not be
+            // able to replay it anywhere else.
+            'allow_redirects' => false,
             'headers' => [
                 'Accept' => 'application/json',
             ],

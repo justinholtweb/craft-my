@@ -315,6 +315,11 @@ class Plugin extends BasePlugin
                         ],
                         'my-viewLog' => [
                             'label' => Craft::t('my', 'View the connection log'),
+                            'nested' => [
+                                'my-clearLog' => [
+                                    'label' => Craft::t('my', 'Clear the connection log'),
+                                ],
+                            ],
                         ],
                     ],
                 ];

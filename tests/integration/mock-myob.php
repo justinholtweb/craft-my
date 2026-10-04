@@ -56,8 +56,10 @@ journal($method, $path, $_GET, headers(), $body);
 // Queued failures, one per request, so a test can say "fail twice then succeed".
 $control = file_exists(CONTROL) ? (json_decode(file_get_contents(CONTROL), true) ?: []) : [];
 $queue = $control['fail'] ?? [];
+// `failPath` aims the queue at one endpoint, so the requests before it in a push go through.
+$failPath = $control['failPath'] ?? null;
 
-if ($queue !== []) {
+if ($queue !== [] && ($failPath === null || str_ends_with($path, $failPath))) {
     $status = (int)array_shift($queue);
     $control['fail'] = $queue;
     file_put_contents(CONTROL, json_encode($control));

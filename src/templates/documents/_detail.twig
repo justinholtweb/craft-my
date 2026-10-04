@@ -8,60 +8,90 @@
     { label: 'Documents'|t('my'), url: url('my/documents') },
 ] %}
 
+{% do view.registerTranslations('my', [
+    'Unlink this document? It stays in MYOB, but Craft will be willing to push the order again.',
+    'The request failed.',
+]) %}
+
 {% block content %}
-    <div class="pane">
-        <table class="data fullwidth">
-            <tbody>
-                <tr><th style="width: 180px;">{{ 'Status'|t('my') }}</th>
-                    <td><span class="status {{ document.getStatusColor() }}"></span> {{ document.getStatusLabel() }}</td></tr>
-                <tr><th>{{ 'Order'|t('my') }}</th>
-                    <td>
-                        {% if order %}
-                            <a href="{{ document.getOrderCpUrl() }}">{{ order.reference ?? order.getShortNumber() }}</a>
-                        {% else %}
-                            <span class="light">{{ 'The order has been deleted.'|t('my') }}</span>
-                        {% endif %}
-                    </td></tr>
-                <tr><th>{{ 'MYOB UID'|t('my') }}</th><td class="code">{{ document.myobUid ?? '—' }}</td></tr>
-                <tr><th>{{ 'MYOB number'|t('my') }}</th><td class="code">{{ document.myobNumber ?? '—' }}</td></tr>
-                <tr><th>{{ 'Amount'|t('my') }}</th>
-                    <td>{{ document.amount is not null ? document.amount|number(decimals=2) : '—' }} {{ document.currency }}</td></tr>
-                <tr><th>{{ 'Attempts'|t('my') }}</th><td>{{ document.attempts }}</td></tr>
-                <tr><th>{{ 'Synced'|t('my') }}</th>
-                    <td>{{ document.dateSynced ? document.dateSynced|datetime('short') : '—' }}</td></tr>
-            </tbody>
-        </table>
+    {% if document.lastError %}
+        <div class="readable">
+            <blockquote class="note warning">
+                <p><strong>{{ 'Last error:'|t('my') }}</strong> {{ document.lastError }}</p>
+            </blockquote>
+        </div>
+        <hr>
+    {% endif %}
 
-        {% if document.lastError %}
-            <p class="error" style="margin-top: 12px;">{{ document.lastError }}</p>
-        {% endif %}
+    <table class="data fullwidth">
+        <tbody>
+            <tr>
+                <th scope="row" class="thin nowrap">{{ 'Status'|t('my') }}</th>
+                <td><span class="status {{ document.getStatusColor() }}" aria-hidden="true"></span> {{ document.getStatusLabel() }}</td>
+            </tr>
+            <tr>
+                <th scope="row" class="thin nowrap">{{ 'Order'|t('my') }}</th>
+                <td>
+                    {% if order %}
+                        <a href="{{ document.getOrderCpUrl() }}">{{ order.reference ?? order.getShortNumber() }}</a>
+                    {% else %}
+                        <span class="light">{{ 'The order has been deleted.'|t('my') }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th scope="row" class="thin nowrap">{{ 'MYOB UID'|t('my') }}</th>
+                <td>{% if document.myobUid %}<code>{{ document.myobUid }}</code>{% else %}<span class="light">{{ 'Not assigned'|t('my') }}</span>{% endif %}</td>
+            </tr>
+            <tr>
+                <th scope="row" class="thin nowrap">{{ 'MYOB number'|t('my') }}</th>
+                <td>{% if document.myobNumber %}<code>{{ document.myobNumber }}</code>{% else %}<span class="light">{{ 'Not assigned'|t('my') }}</span>{% endif %}</td>
+            </tr>
+            <tr>
+                <th scope="row" class="thin nowrap">{{ 'Amount'|t('my') }}</th>
+                <td>
+                    {% if document.amount is not null %}
+                        {{ document.amount|number(decimals=2) }} {{ document.currency }}
+                    {% else %}
+                        <span class="light">{{ 'Unknown'|t('my') }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th scope="row" class="thin nowrap">{{ 'Attempts'|t('my') }}</th>
+                <td>{{ document.attempts }}</td>
+            </tr>
+            <tr>
+                <th scope="row" class="thin nowrap">{{ 'Synced'|t('my') }}</th>
+                <td>{% if document.dateSynced %}{{ document.dateSynced|datetime('short') }}{% else %}<span class="light">{{ 'Not yet'|t('my') }}</span>{% endif %}</td>
+            </tr>
+        </tbody>
+    </table>
 
-        {% if currentUser.can('my-unlinkDocuments') %}
-            <div class="flex" style="gap: 8px; margin-top: 12px;">
-                <button type="button" class="btn" id="my-unlink">{{ 'Unlink from MYOB'|t('my') }}</button>
-                <span class="light">{{ 'Forgets the link here. Nothing in MYOB is changed.'|t('my') }}</span>
-            </div>
-        {% endif %}
-    </div>
-
-    {% if document.payload %}
-        <div class="pane">
-            <h2>{{ 'What was sent'|t('my') }}</h2>
-            <pre class="code" style="max-height: 420px; overflow: auto;">{{ document.payload }}</pre>
+    {% if currentUser.can('my-unlinkDocuments') %}
+        <hr>
+        <div class="flex flex-wrap">
+            <button type="button" class="btn" data-my-unlink>{{ 'Unlink from MYOB'|t('my') }}</button>
+            <span class="light">{{ 'Forgets the link here. Nothing in MYOB is changed.'|t('my') }}</span>
         </div>
     {% endif %}
 
+    {% if document.payload %}
+        <hr>
+        <h2>{{ 'What was sent'|t('my') }}</h2>
+        <pre class="code" tabindex="0" aria-label="{{ 'What was sent'|t('my') }}" style="max-height: 420px; overflow: auto;">{{ document.payload }}</pre>
+    {% endif %}
+
     {% if document.response %}
-        <div class="pane">
-            <h2>{{ 'What MYOB said'|t('my') }}</h2>
-            <pre class="code" style="max-height: 420px; overflow: auto;">{{ document.response }}</pre>
-        </div>
+        <hr>
+        <h2>{{ 'What MYOB said'|t('my') }}</h2>
+        <pre class="code" tabindex="0" aria-label="{{ 'What MYOB said'|t('my') }}" style="max-height: 420px; overflow: auto;">{{ document.response }}</pre>
     {% endif %}
 {% endblock %}
 
 {% js %}
 (function () {
-    var button = document.getElementById('my-unlink');
+    var button = document.querySelector('[data-my-unlink]');
     if (!button) return;
 
     button.addEventListener('click', function () {
@@ -70,11 +100,13 @@
         button.classList.add('loading');
 
         Craft.sendActionRequest('POST', 'my/documents/unlink', {
-            data: { documentId: {{ document.id }} }
+            data: { documentId: {{ document.id|json_encode|raw }} }
         }).then(function () {
-            window.location.href = '{{ url('my/documents') }}';
-        }).catch(function () {
+            window.location.href = Craft.getCpUrl('my/documents');
+        }).catch(function (error) {
             button.classList.remove('loading');
+            var data = (error && error.response && error.response.data) || {};
+            Craft.cp.displayError(data.message || Craft.t('my', 'The request failed.'));
         });
     });
 })();

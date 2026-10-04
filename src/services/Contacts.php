@@ -41,17 +41,27 @@ class Contacts extends Component
     private const MAX_DISPLAY_ID = 15;
 
     /**
+     * What a read-only resolution (a preview, a dry run) puts where a card would be created.
+     * Plainly not a MYOB UID, so it cannot be mistaken for one in the printed payload.
+     */
+    public const PLACEHOLDER_UID = 'new-card-created-on-push';
+
+    /**
      * The MYOB customer for an order, as a payload reference.
+     *
+     * `$readOnly` is for the preview panel and `--dryRun`: nothing is created or updated in MYOB
+     * and nothing is remembered locally. A card that would have to be created is answered with
+     * `PLACEHOLDER_UID` instead.
      *
      * @return array{UID: string}
      * @throws MyobApiException
      */
-    public function resolveForOrder(Order $order): array
+    public function resolveForOrder(Order $order, bool $readOnly = false): array
     {
         $settings = Plugin::getInstance()->getSettings();
 
         if ($settings->customerMode === Settings::CUSTOMER_SINGLE_CARD || !$settings->syncCustomers) {
-            return $this->defaultCustomer();
+            return $this->defaultCustomer($readOnly);
         }
 
         $key = $this->sourceKey($order);
@@ -60,13 +70,13 @@ class Contacts extends Component
             // No email and no user: a genuinely anonymous order. The default card is the only
             // honest answer — inventing a card called "Guest 4821" per order is how company files
             // end up with 40,000 dead contacts.
-            return $this->defaultCustomer();
+            return $this->defaultCustomer($readOnly);
         }
 
         $known = $this->getMapping($key);
 
         if ($known !== null) {
-            if ($settings->updateExistingContacts) {
+            if ($settings->updateExistingContacts && !$readOnly) {
                 $this->updateContact($known, $order);
             }
 
@@ -76,9 +86,15 @@ class Contacts extends Component
         $existing = $this->findByEmail($this->email($order));
 
         if ($existing !== null) {
-            $this->remember($key, $existing, $order);
+            if (!$readOnly) {
+                $this->remember($key, $existing, $order);
+            }
 
             return ['UID' => (string)$existing['UID']];
+        }
+
+        if ($readOnly) {
+            return ['UID' => self::PLACEHOLDER_UID];
         }
 
         $created = $this->createContact($order);
@@ -93,7 +109,7 @@ class Contacts extends Component
      * @return array{UID: string}
      * @throws MyobApiException
      */
-    public function defaultCustomer(): array
+    public function defaultCustomer(bool $readOnly = false): array
     {
         $settings = Plugin::getInstance()->getSettings();
         $uid = trim($settings->defaultCustomerUid);
@@ -118,6 +134,10 @@ class Contacts extends Component
         $filter = "CompanyName eq '" . $this->escape($name) . "'";
         $row = Plugin::getInstance()->getApi()->findOne('Contact/Customer', $filter, ['action' => 'contact.find']);
 
+        if ($row === null && $readOnly) {
+            return ['UID' => self::PLACEHOLDER_UID];
+        }
+
         if ($row === null) {
             $row = Plugin::getInstance()->getApi()->post('Contact/Customer', [
                 'IsIndividual' => false,
@@ -132,7 +152,9 @@ class Contacts extends Component
             throw new MyobApiException(Craft::t('my', 'MYOB did not return a UID for the default customer card.'));
         }
 
-        $this->rememberUid($key, $uid, (string)($row['DisplayID'] ?? ''), $name, null);
+        if (!$readOnly) {
+            $this->rememberUid($key, $uid, (string)($row['DisplayID'] ?? ''), $name, null);
+        }
 
         return ['UID' => $uid];
     }

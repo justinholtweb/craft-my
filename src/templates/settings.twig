@@ -12,18 +12,29 @@
 {% set isConnected = connection.isConnected() %}
 {% set isLocal = settings.isLocal() %}
 
+{# Buttons and result lines are found by `data-my-*` attributes, never by `id`: Craft namespaces
+   every `id` in this template's output (`my-test` arrives as `settings-my-test`) but not the JS. #}
+{% do view.registerTranslations('my', [
+    'The request failed.',
+    'Use this file',
+    'Disconnect from MYOB? Nothing in MYOB is changed.',
+]) %}
+
 {% if not commerceReady %}
-    <div class="pane">
-        <p class="error">{{ 'Craft Commerce is not installed or enabled. My needs it to do anything.'|t('my') }}</p>
+    <div class="readable">
+        <blockquote class="note warning">
+            <p>{{ 'Craft Commerce is not installed or enabled. My needs it to do anything.'|t('my') }}</p>
+        </blockquote>
     </div>
+    <hr>
 {% endif %}
 
 {# ---------------------------------------------------------------- Connection #}
 <h2>{{ 'Connection'|t('my') }}</h2>
 
 <div class="pane">
-    <div class="flex" style="align-items: center; gap: 8px;">
-        <span class="status {{ isConnected ? 'green' : 'red' }}"></span>
+    <div class="flex flex-wrap">
+        <span class="status {{ isConnected ? 'on' : 'off' }}" aria-hidden="true"></span>
         <strong>
             {% if isConnected %}
                 {{ 'Connected to {name}'|t('my', { name: connection.getLabel() }) }}
@@ -36,17 +47,17 @@
         {% endif %}
     </div>
 
-    <div class="flex" style="margin-top: 12px; gap: 8px;">
+    <div class="flex flex-wrap" style="margin-block-start: var(--m);">
         {% if not isLocal %}
             <a class="btn" href="{{ actionUrl('my/oauth/connect') }}">
                 {{ isConnected ? 'Reconnect'|t('my') : 'Connect to MYOB'|t('my') }}
             </a>
         {% endif %}
-        <button type="button" class="btn" id="my-test">{{ 'Test connection'|t('my') }}</button>
+        <button type="button" class="btn" data-my-action="my/settings/test" data-my-result-for="test">{{ 'Test connection'|t('my') }}</button>
         {% if isConnected %}
-            <button type="button" class="btn" id="my-disconnect">{{ 'Disconnect'|t('my') }}</button>
+            <button type="button" class="btn caution" data-my-disconnect>{{ 'Disconnect'|t('my') }}</button>
         {% endif %}
-        <span id="my-test-result" class="light"></span>
+        <span class="light" data-my-result="test" role="status" aria-live="polite"></span>
     </div>
 </div>
 
@@ -66,18 +77,20 @@
 
 <div id="my-mode-cloud" class="{{ isLocal ? 'hidden' }}">
     <div class="pane">
-        <p>
-            {{ 'Create an app at {link} and register this redirect URL against it, exactly as printed — MYOB matches it character for character.'|t('my', {
-                link: '<a href="https://my.myob.com.au/au/bd/DevAppList.aspx" rel="noopener" target="_blank">developer.myob.com</a>'
-            })|raw }}
-        </p>
-
-        {{ forms.textField({
+        {{ forms.copytextField({
             label: 'Redirect URL'|t('my'),
+            instructions: 'Create an app at {link} and register this redirect URL against it, exactly as printed — MYOB matches it character for character.'|t('my', {
+                link: tag('a', {
+                    href: 'https://my.myob.com.au/au/bd/DevAppList.aspx',
+                    rel: 'noopener noreferrer',
+                    target: '_blank',
+                    text: 'developer.myob.com',
+                }),
+            }),
             id: 'my-redirect-uri',
             value: settings.getRedirectUri(),
-            readonly: true,
             class: 'code',
+            first: true,
         }) }}
     </div>
 
@@ -137,29 +150,26 @@
 <div class="pane">
     <h3>{{ 'Company file'|t('my') }}</h3>
 
-    <div class="flex" style="gap: 8px; align-items: flex-end;">
-        <div style="flex: 1;">
-            {{ forms.textField({
-                label: 'Company file ID'|t('my'),
-                instructions: 'Set here to pin the file per environment. Leave blank to use whichever file was chosen below.'|t('my'),
-                id: 'companyFileId',
-                name: 'companyFileId',
-                value: settings.companyFileId,
-                placeholder: connection.companyFileId ?? '',
-                class: 'code',
-            }) }}
-        </div>
+    {{ forms.textField({
+        label: 'Company file ID'|t('my'),
+        instructions: 'Set here to pin the file per environment. Leave blank to use whichever file was chosen below.'|t('my'),
+        id: 'companyFileId',
+        name: 'companyFileId',
+        value: settings.companyFileId,
+        placeholder: connection.companyFileId ?? '',
+        class: 'code',
+    }) }}
+
+    <div class="flex flex-wrap" style="margin-block-start: var(--s);">
+        <button type="button" class="btn" data-my-action="my/settings/company-files" data-my-result-for="files">{{ 'List company files'|t('my') }}</button>
+        <span class="light" data-my-result="files" role="status" aria-live="polite"></span>
     </div>
 
-    <div class="flex" style="gap: 8px; margin-top: 8px;">
-        <button type="button" class="btn" id="my-list-files">{{ 'List company files'|t('my') }}</button>
-        <span id="my-files-result" class="light"></span>
-    </div>
-
-    <div id="my-files" style="margin-top: 12px;"></div>
+    <ul data-my-files style="margin-block-start: var(--m);"></ul>
 </div>
 
 {# ------------------------------------------------------------------ Invoices #}
+<hr>
 <h2>{{ 'Invoices'|t('my') }}</h2>
 
 {{ forms.lightswitchField({
@@ -190,19 +200,23 @@
         { label: 'Service'|t('my'), value: 'service' },
         { label: 'Item'|t('my'), value: 'item' },
     ],
+    toggle: true,
+    targetPrefix: 'my-layout-',
 }) }}
 
-{{ forms.selectField({
-    label: 'When a SKU is not in MYOB'|t('my'),
-    instructions: 'Item invoices only.'|t('my'),
-    id: 'itemFallback',
-    name: 'itemFallback',
-    value: settings.itemFallback,
-    options: [
-        { label: 'Post the line to the sales account instead'|t('my'), value: 'service' },
-        { label: 'Refuse to push the order'|t('my'), value: 'fail' },
-    ],
-}) }}
+<div id="my-layout-item" class="{{ settings.invoiceLayout != 'item' ? 'hidden' }}">
+    {{ forms.selectField({
+        label: 'When a SKU is not in MYOB'|t('my'),
+        instructions: 'Item invoices only.'|t('my'),
+        id: 'itemFallback',
+        name: 'itemFallback',
+        value: settings.itemFallback,
+        options: [
+            { label: 'Post the line to the sales account instead'|t('my'), value: 'service' },
+            { label: 'Refuse to push the order'|t('my'), value: 'fail' },
+        ],
+    }) }}
+</div>
 
 {{ forms.selectField({
     label: 'Invoice number'|t('my'),
@@ -280,9 +294,9 @@
         class: 'code',
     }) }}
 
-    <div class="flex" style="gap: 8px; margin-top: 8px;">
-        <button type="button" class="btn" id="my-refresh-reference">{{ 'Refresh accounts and tax codes from MYOB'|t('my') }}</button>
-        <span id="my-reference-result" class="light"></span>
+    <div class="flex flex-wrap" style="margin-block-start: var(--s);">
+        <button type="button" class="btn" data-my-action="my/settings/refresh-reference" data-my-result-for="reference">{{ 'Refresh accounts and tax codes from MYOB'|t('my') }}</button>
+        <span class="light" data-my-result="reference" role="status" aria-live="polite"></span>
     </div>
 </div>
 
@@ -319,6 +333,7 @@
 }) }}
 
 {# ----------------------------------------------------------------------- Tax #}
+<hr>
 <h2>{{ 'Tax'|t('my') }}</h2>
 
 {{ forms.selectField({
@@ -363,30 +378,39 @@
 }) }}
 
 {% if taxCategories %}
-    <div class="field">
-        <div class="heading"><label>{{ 'Tax category mapping'|t('my') }}</label></div>
-        <div class="instructions"><p>{{ 'Which MYOB tax code each Commerce tax category posts under. Blank falls back to the default above.'|t('my') }}</p></div>
+    {% set taxMapTable %}
         <table class="data fullwidth">
             <thead>
                 <tr>
-                    <th>{{ 'Commerce tax category'|t('my') }}</th>
-                    <th>{{ 'MYOB tax code'|t('my') }}</th>
+                    <th scope="col">{{ 'Commerce tax category'|t('my') }}</th>
+                    <th scope="col">{{ 'MYOB tax code'|t('my') }}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for category in taxCategories %}
                     <tr>
-                        <td>{{ category.name }} <code>{{ category.handle }}</code></td>
+                        <th scope="row">{{ category.name }} <code class="light">{{ category.handle }}</code></th>
                         <td>
-                            <input type="text" class="text code" size="8"
-                                   name="taxCodeMap[{{ category.handle }}]"
-                                   value="{{ settings.taxCodeMap[category.handle] ?? '' }}">
+                            {{ forms.text({
+                                name: 'taxCodeMap[' ~ category.handle ~ ']',
+                                value: settings.taxCodeMap[category.handle] ?? '',
+                                size: 8,
+                                class: 'code',
+                                inputAttributes: { aria: { label: 'MYOB tax code for {name}'|t('my', { name: category.name }) } },
+                            }) }}
                         </td>
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
-    </div>
+    {% endset %}
+
+    {{ forms.field({
+        label: 'Tax category mapping'|t('my'),
+        instructions: 'Which MYOB tax code each Commerce tax category posts under. Blank falls back to the default above.'|t('my'),
+        id: 'taxCodeMap',
+        fieldset: true,
+    }, taxMapTable) }}
 {% endif %}
 
 {{ forms.textField({
@@ -414,6 +438,7 @@
 }) }}
 
 {# ----------------------------------------------------------------- Customers #}
+<hr>
 <h2>{{ 'Customers'|t('my') }}</h2>
 
 {{ forms.lightswitchField({
@@ -479,6 +504,7 @@
 }) }}
 
 {# ------------------------------------------------------------------ Payments #}
+<hr>
 <h2>{{ 'Payments'|t('my') }}</h2>
 
 {{ forms.lightswitchField({
@@ -498,16 +524,20 @@
         { label: 'Undeposited funds'|t('my'), value: 'UndepositedFunds' },
         { label: 'A bank account'|t('my'), value: 'Account' },
     ],
+    toggle: true,
+    targetPrefix: 'my-deposit-',
 }) }}
 
-{{ forms.textField({
-    label: 'Bank account'|t('my'),
-    instructions: 'Only used when depositing to an account.'|t('my'),
-    id: 'paymentAccount',
-    name: 'paymentAccount',
-    value: settings.paymentAccount,
-    class: 'code',
-}) }}
+<div id="my-deposit-Account" class="{{ settings.depositTo != 'Account' ? 'hidden' }}">
+    {{ forms.textField({
+        label: 'Bank account'|t('my'),
+        instructions: 'Only used when depositing to an account.'|t('my'),
+        id: 'paymentAccount',
+        name: 'paymentAccount',
+        value: settings.paymentAccount,
+        class: 'code',
+    }) }}
+</div>
 
 {{ forms.selectField({
     label: 'Default payment method'|t('my'),
@@ -519,39 +549,42 @@
 }) }}
 
 {% if gateways %}
-    <div class="field">
-        <div class="heading"><label>{{ 'Gateway mapping'|t('my') }}</label></div>
-        <div class="instructions"><p>{{ 'Which MYOB payment method each Commerce gateway records as.'|t('my') }}</p></div>
+    {% set gatewayMapTable %}
         <table class="data fullwidth">
             <thead>
                 <tr>
-                    <th>{{ 'Commerce gateway'|t('my') }}</th>
-                    <th>{{ 'MYOB payment method'|t('my') }}</th>
+                    <th scope="col">{{ 'Commerce gateway'|t('my') }}</th>
+                    <th scope="col">{{ 'MYOB payment method'|t('my') }}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for gateway in gateways %}
                     <tr>
-                        <td>{{ gateway.name }} <code>{{ gateway.handle }}</code></td>
+                        <th scope="row">{{ gateway.name }} <code class="light">{{ gateway.handle }}</code></th>
                         <td>
-                            <select name="paymentMethodMap[{{ gateway.handle }}]">
-                                <option value="">{{ '(use the default)'|t('my') }}</option>
-                                {% for method in paymentMethods %}
-                                    <option value="{{ method.value }}"
-                                        {{ (settings.paymentMethodMap[gateway.handle] ?? '') == method.value ? 'selected' }}>
-                                        {{ method.label }}
-                                    </option>
-                                {% endfor %}
-                            </select>
+                            {{ forms.select({
+                                name: 'paymentMethodMap[' ~ gateway.handle ~ ']',
+                                value: settings.paymentMethodMap[gateway.handle] ?? '',
+                                options: [{ label: '(use the default)'|t('my'), value: '' }]|merge(paymentMethods),
+                                inputAttributes: { aria: { label: 'MYOB payment method for {name}'|t('my', { name: gateway.name }) } },
+                            }) }}
                         </td>
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
-    </div>
+    {% endset %}
+
+    {{ forms.field({
+        label: 'Gateway mapping'|t('my'),
+        instructions: 'Which MYOB payment method each Commerce gateway records as.'|t('my'),
+        id: 'paymentMethodMap',
+        fieldset: true,
+    }, gatewayMapTable) }}
 {% endif %}
 
 {# ------------------------------------------------------------------- Refunds #}
+<hr>
 <h2>{{ 'Refunds'|t('my') }}</h2>
 
 {{ forms.lightswitchField({
@@ -571,18 +604,23 @@
         { label: 'Leave it on the customer’s account'|t('my'), value: 'creditNote' },
         { label: 'Also record the money going back out'|t('my'), value: 'creditNoteAndRefund' },
     ],
+    toggle: true,
+    targetPrefix: 'my-refund-',
 }) }}
 
-{{ forms.textField({
-    label: 'Refund account'|t('my'),
-    instructions: 'Where refunded money comes out of. Falls back to the bank account above.'|t('my'),
-    id: 'refundAccount',
-    name: 'refundAccount',
-    value: settings.refundAccount,
-    class: 'code',
-}) }}
+<div id="my-refund-creditNoteAndRefund" class="{{ settings.refundMode != 'creditNoteAndRefund' ? 'hidden' }}">
+    {{ forms.textField({
+        label: 'Refund account'|t('my'),
+        instructions: 'Where refunded money comes out of. Falls back to the bank account above.'|t('my'),
+        id: 'refundAccount',
+        name: 'refundAccount',
+        value: settings.refundAccount,
+        class: 'code',
+    }) }}
+</div>
 
 {# ------------------------------------------------------------------ Advanced #}
+<hr>
 <h2>{{ 'Advanced'|t('my') }}</h2>
 
 {{ forms.textField({
@@ -656,47 +694,30 @@
             });
     };
 
-    var say = function (id, result) {
-        var el = document.getElementById(id);
+    var say = function (key, result) {
+        var el = document.querySelector('[data-my-result="' + key + '"]');
         if (!el) return;
         el.textContent = result.message || '';
-        el.style.color = result.success ? '' : '#CF1124';
+        el.classList.toggle('error', result.success === false);
+        el.classList.toggle('light', result.success !== false);
     };
 
-    var bind = function (id, action, handler) {
-        var button = document.getElementById(id);
-        if (!button) return;
-        button.addEventListener('click', function () {
-            button.classList.add('loading');
-            post(action, {}, function (result) {
-                button.classList.remove('loading');
-                handler(result);
-            });
-        });
-    };
+    var renderFiles = function (files) {
+        var list = document.querySelector('[data-my-files]');
+        if (!list) return;
+        list.innerHTML = '';
 
-    bind('my-test', 'my/settings/test', function (r) { say('my-test-result', r); });
+        (files || []).forEach(function (file) {
+            var row = document.createElement('li');
+            row.className = 'flex flex-wrap';
+            row.style.paddingBlock = 'var(--2xs)';
 
-    bind('my-refresh-reference', 'my/settings/refresh-reference', function (r) {
-        say('my-reference-result', r);
-    });
+            var name = document.createElement('strong');
+            name.textContent = file.Name;
 
-    bind('my-list-files', 'my/settings/company-files', function (r) {
-        say('my-files-result', r);
-
-        var wrapper = document.getElementById('my-files');
-        if (!wrapper) return;
-        wrapper.innerHTML = '';
-
-        (r.files || []).forEach(function (file) {
-            var row = document.createElement('div');
-            row.className = 'flex';
-            row.style.cssText = 'gap: 8px; align-items: center; padding: 4px 0;';
-
-            var label = document.createElement('span');
-            label.innerHTML = '<strong></strong> <code></code>';
-            label.querySelector('strong').textContent = file.Name;
-            label.querySelector('code').textContent = file.Id;
+            var id = document.createElement('code');
+            id.className = 'light';
+            id.textContent = file.Id;
 
             var choose = document.createElement('button');
             choose.type = 'button';
@@ -706,17 +727,30 @@
                 choose.classList.add('loading');
                 post('my/settings/select-company-file', { id: file.Id, uri: file.Uri, name: file.Name }, function (result) {
                     choose.classList.remove('loading');
-                    say('my-files-result', result);
+                    say('files', result);
                 });
             });
 
+            row.appendChild(name);
+            row.appendChild(id);
             row.appendChild(choose);
-            row.appendChild(label);
-            wrapper.appendChild(row);
+            list.appendChild(row);
+        });
+    };
+
+    document.querySelectorAll('[data-my-action]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var key = button.getAttribute('data-my-result-for');
+            button.classList.add('loading');
+            post(button.getAttribute('data-my-action'), {}, function (result) {
+                button.classList.remove('loading');
+                say(key, result);
+                if (key === 'files') renderFiles(result.files);
+            });
         });
     });
 
-    var disconnect = document.getElementById('my-disconnect');
+    var disconnect = document.querySelector('[data-my-disconnect]');
     if (disconnect) {
         disconnect.addEventListener('click', function () {
             if (!confirm(Craft.t('my', 'Disconnect from MYOB? Nothing in MYOB is changed.'))) return;

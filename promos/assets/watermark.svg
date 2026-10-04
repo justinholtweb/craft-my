@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="31 24 40 64">
+  <!-- Slide watermark: the glyph from src/icon-mask.svg, in white, with no tile — and without the
+       sheet of paper. At watermark scale the sheet is a 1000px flat slab whose edges and punched-out
+       rules read as hard grey boxes across every slide, so only what is printed on the invoice is
+       kept: the three text lines, the total, and its double rule, as solid pills. The viewBox is
+       cropped to them, so they run off the slide edge the way the parcel does on Shipper's. -->
+  <path fill="#FFFFFF" d="M37 30H49a3 3 0 0 1 0 6H37a3 3 0 0 1 0 -6ZM37 42H63a3 3 0 0 1 0 6H37a3 3 0 0 1 0 -6ZM37 54H63a3 3 0 0 1 0 6H37a3 3 0 0 1 0 -6ZM51 66H63a3 3 0 0 1 0 6H51a3 3 0 0 1 0 -6ZM49.25 75.5H64.75a1.25 1.25 0 0 1 0 2.5H49.25a1.25 1.25 0 0 1 0 -2.5ZM49.25 80H64.75a1.25 1.25 0 0 1 0 2.5H49.25a1.25 1.25 0 0 1 0 -2.5Z"/>
+</svg>

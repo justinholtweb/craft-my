@@ -52,6 +52,11 @@ class Api extends Component
      */
     private bool $_refreshed = false;
 
+    /**
+     * The bearer token the last request went out with, so a 401 can say which token it rejected.
+     */
+    private ?string $_sentToken = null;
+
     // Verbs
     // -------------------------------------------------------------------------
 
@@ -268,7 +273,10 @@ class Api extends Component
             // 401 is real.
             if ($exception->statusCode === 401 && !$this->_refreshed && !$settings->isLocal()) {
                 $this->_refreshed = true;
-                Plugin::getInstance()->getAuth()->refresh();
+                // Forced: the token was rejected, whatever its expiry date says. Passing the
+                // rejected token lets a worker that lost the race use the winner's token rather
+                // than rotating the refresh token a second time.
+                Plugin::getInstance()->getAuth()->refresh(true, $this->_sentToken);
 
                 return $this->send($method, $url, $options, $attempt);
             }
@@ -386,6 +394,7 @@ class Api extends Component
         $headers['x-myobapi-key'] = $settings->getParsedClientId();
 
         $token = Plugin::getInstance()->getAuth()->getAccessToken();
+        $this->_sentToken = $token;
 
         if ($token !== null) {
             $headers['Authorization'] = 'Bearer ' . $token;

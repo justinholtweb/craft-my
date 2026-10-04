@@ -57,6 +57,17 @@ class OauthController extends Controller
         $expected = $session->get(self::STATE_KEY);
         $session->remove(self::STATE_KEY);
 
+        // State first, before anything on the query string is believed — including an `error`.
+        // Otherwise a crafted link could write arbitrary text into the connection log and the
+        // admin's flash message without the flow ever having been started.
+        $state = (string)$request->getQueryParam('state', '');
+
+        if ($expected === null || !hash_equals((string)$expected, $state)) {
+            $session->setError(Craft::t('my', 'The MYOB authorisation did not come back the way it left. Try connecting again.'));
+
+            return $this->redirect('settings/plugins/my');
+        }
+
         $error = $request->getQueryParam('error');
 
         if ($error !== null) {
@@ -69,14 +80,6 @@ class OauthController extends Controller
             ]);
 
             $session->setError(Craft::t('my', 'MYOB refused the authorisation: {error}', ['error' => $description]));
-
-            return $this->redirect('settings/plugins/my');
-        }
-
-        $state = (string)$request->getQueryParam('state', '');
-
-        if ($expected === null || !hash_equals((string)$expected, $state)) {
-            $session->setError(Craft::t('my', 'The MYOB authorisation did not come back the way it left. Try connecting again.'));
 
             return $this->redirect('settings/plugins/my');
         }

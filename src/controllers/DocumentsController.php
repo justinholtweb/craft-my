@@ -4,6 +4,7 @@ namespace justinholtweb\my\controllers;
 
 use Craft;
 use craft\commerce\elements\Order;
+use craft\elements\User;
 use craft\helpers\Json;
 use craft\web\Controller;
 use justinholtweb\my\errors\MyobApiException;
@@ -70,9 +71,17 @@ class DocumentsController extends Controller
             throw new NotFoundHttpException('Document not found');
         }
 
+        $order = Order::find()->id($document->orderId)->status(null)->one();
+
+        // The stored payload is the customer's name, email and addresses. Seeing it is seeing the
+        // order, so it takes the same permission Commerce asks for.
+        if ($order instanceof Order) {
+            $this->requireOrderAccess($order);
+        }
+
         return $this->renderTemplate('my/documents/_detail', [
             'document' => $document,
-            'order' => Order::find()->id($document->orderId)->status(null)->one(),
+            'order' => $order,
         ]);
     }
 
@@ -98,6 +107,8 @@ class DocumentsController extends Controller
         if (!$order instanceof Order) {
             return $this->asFailure(Craft::t('my', 'No such order.'));
         }
+
+        $this->requireOrderAccess($order);
 
         $result = Plugin::getInstance()->getSync()->pushOrder($order, $force);
         $messages = array_filter($result['messages']);
@@ -135,7 +146,7 @@ class DocumentsController extends Controller
         foreach ($orderIds as $orderId) {
             $order = Order::find()->id($orderId)->status(null)->one();
 
-            if ($order instanceof Order) {
+            if ($order instanceof Order && $this->canAccessOrder($order, static::currentUser())) {
                 $sync->queue($order, (bool)Craft::$app->getRequest()->getBodyParam('force', false));
                 $queued++;
             }
@@ -163,10 +174,13 @@ class DocumentsController extends Controller
             return $this->asJson(['success' => false, 'message' => Craft::t('my', 'No such order.')]);
         }
 
+        $this->requireOrderAccess($order);
+
         $plugin = Plugin::getInstance();
 
         try {
-            $customerRef = $plugin->getContacts()->resolveForOrder($order);
+            // Read-only: a preview must not create (or update) a card in MYOB.
+            $customerRef = $plugin->getContacts()->resolveForOrder($order, true);
             $payload = $plugin->getInvoices()->buildPayload($order, $customerRef);
             $check = $plugin->getInvoices()->reconcile($order, $payload);
         } catch (MyobApiException $e) {
@@ -201,5 +215,29 @@ class DocumentsController extends Controller
         return $this->asSuccess(Craft::t('my', 'Unlinked. The {type} is still in MYOB.', [
             'type' => mb_strtolower($document->getTypeLabel()),
         ]));
+    }
+
+    /**
+     * Whether a user may see an order — Commerce's own rule, through the Elements service so that
+     * any `EVENT_AUTHORIZE_VIEW` handler on the site is honoured too.
+     *
+     * The plugin's permissions say what a user may do *with MYOB*; they say nothing about which
+     * orders the user may read, and the push, preview and detail screens all show the order's
+     * customer details. Order ids arrive in POST data, so without this a user holding only
+     * `my-pushOrders` could read any customer's details by guessing ids.
+     */
+    protected function canAccessOrder(Order $order, ?User $user): bool
+    {
+        return $user !== null && Craft::$app->getElements()->canView($order, $user);
+    }
+
+    /**
+     * @throws ForbiddenHttpException
+     */
+    private function requireOrderAccess(Order $order): void
+    {
+        if (!$this->canAccessOrder($order, static::currentUser())) {
+            throw new ForbiddenHttpException(Craft::t('app', 'User is not authorized to perform this action.'));
+        }
     }
 }

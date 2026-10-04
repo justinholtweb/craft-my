@@ -70,7 +70,7 @@ class ReferenceController extends Controller
         $item = Plugin::getInstance()->getReference()->findItem($number);
 
         if ($item === null) {
-            $this->stdout("No MYOB item numbered “$number”.\n", Console::FG_YELLOW);
+            $this->stdout("No MYOB item numbered “{$number}”.\n", Console::FG_YELLOW);
 
             return ExitCode::DATAERR;
         }

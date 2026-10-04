@@ -601,6 +601,28 @@ try {
         return $cloud->validate() && !$local->validate() && $local->hasErrors('localBaseUrl');
     });
 
+    check('a local URL that is not HTTP is rejected', function() {
+        // FILTER_VALIDATE_URL alone accepts these, and every request carries the company file
+        // credentials to whatever this points at.
+        foreach (['file:///etc/passwd', 'gopher://127.0.0.1:6379/_x', 'ftp://example.com/'] as $url) {
+            $settings = new Settings();
+            $settings->mode = Settings::MODE_LOCAL;
+            $settings->localBaseUrl = $url;
+            $settings->salesAccount = '4-1000';
+
+            if ($settings->validate() || !$settings->hasErrors('localBaseUrl')) {
+                return "accepted $url";
+            }
+        }
+
+        $ok = new Settings();
+        $ok->mode = Settings::MODE_LOCAL;
+        $ok->localBaseUrl = 'https://accountright.example.com:8443/accountright/';
+        $ok->salesAccount = '4-1000';
+
+        return $ok->validate() ?: Json::encode($ok->getErrors());
+    });
+
     check('the cf token is base64 of username:password', function() {
         $settings = new Settings();
         $settings->cfUsername = 'Administrator';
@@ -734,6 +756,82 @@ try {
         applySettings(['companyFileId' => '']);
 
         return $override === 'override-file-id' ?: 'got ' . var_export($override, true);
+    });
+
+    check('a company file URI off the configured server is refused in local mode', function() {
+        $auth = Plugin::getInstance()->getAuth();
+        $good = rtrim(MOCK_BASE, '/') . '/' . MOCK_CF;
+
+        $refused = [
+            'http://evil.example/accountright/' . MOCK_CF,
+            'http://127.0.0.1:9999/accountright/' . MOCK_CF,
+            'http://user:pass@127.0.0.1:' . MOCK_PORT . '/accountright/' . MOCK_CF,
+            'file:///etc/passwd',
+            'not a url',
+        ];
+
+        foreach ($refused as $uri) {
+            if ($auth->isAcceptableCompanyFileUri($uri)) {
+                return "accepted $uri";
+            }
+        }
+
+        return $auth->isAcceptableCompanyFileUri($good) ?: "refused $good";
+    });
+
+    check('a company file URI must be HTTPS on myob.com in cloud mode', function() {
+        $auth = Plugin::getInstance()->getAuth();
+
+        applySettings(['mode' => Settings::MODE_CLOUD]);
+
+        try {
+            $accepted = [
+                'https://api.myob.com/accountright/' . MOCK_CF,
+                'https://ar1.api.myob.com/accountright/' . MOCK_CF,
+            ];
+            $refused = [
+                'http://api.myob.com/accountright/' . MOCK_CF,
+                'https://api.myob.com.evil.example/accountright/' . MOCK_CF,
+                'https://evilmyob.com/accountright/' . MOCK_CF,
+                rtrim(MOCK_BASE, '/') . '/' . MOCK_CF,
+            ];
+
+            foreach ($accepted as $uri) {
+                if (!$auth->isAcceptableCompanyFileUri($uri)) {
+                    return "refused $uri";
+                }
+            }
+
+            foreach ($refused as $uri) {
+                if ($auth->isAcceptableCompanyFileUri($uri)) {
+                    return "accepted $uri";
+                }
+            }
+
+            return true;
+        } finally {
+            applySettings(['mode' => Settings::MODE_LOCAL]);
+        }
+    });
+
+    check('selecting a company file with a foreign URI saves nothing', function() {
+        // The URI arrives in POST data from the settings screen, and every later request carries
+        // the bearer token and company file credentials to it.
+        $auth = Plugin::getInstance()->getAuth();
+        $before = $auth->getConnection()->companyFileUri;
+
+        try {
+            $auth->selectCompanyFile(MOCK_CF, 'http://evil.example/accountright/' . MOCK_CF, 'Evil');
+
+            return 'no exception';
+        } catch (MyobApiException) {
+            // expected
+        }
+
+        $after = (new craft\db\Query())->select(['companyFileUri'])->from([Table::CONNECTION])->scalar();
+
+        return $after === $before && $auth->getConnection()->companyFileUri === $before
+            ?: 'stored ' . var_export($after, true);
     });
 
     // -----------------------------------------------------------------------
@@ -1920,6 +2018,30 @@ try {
         return ($payload['Number'] ?? null) !== $invoices->invoiceNumber($refunded) ?: 'the credit note reused the invoice number';
     });
 
+    check('every refund on an order gets its own credit note number', function() use ($refunds, $payments, $customerRef, $invoices, $knownVariant, $suffix) {
+        // MYOB numbers must be unique; three partial refunds once all went out as the same `CR…`.
+        $order = makeOrder([['variant' => $knownVariant, 'qty' => 1]], 'refunds3-' . $suffix . '@example.com');
+        addTransaction($order, TransactionRecord::TYPE_PURCHASE, 110.00);
+        addTransaction($order, TransactionRecord::TYPE_REFUND, 30.00);
+        addTransaction($order, TransactionRecord::TYPE_REFUND, 20.00);
+        addTransaction($order, TransactionRecord::TYPE_REFUND, 10.00);
+        $order = reload($order);
+
+        $numbers = [];
+
+        foreach ($payments->getRefundTransactions($order) as $transaction) {
+            $numbers[] = (string)($refunds->buildCreditNote($order, $transaction, $customerRef)['Number'] ?? '');
+        }
+
+        $first = $invoices->invoiceNumber($order, true);
+
+        return count($numbers) === 3
+            && count(array_unique($numbers)) === 3
+            && in_array($first, $numbers, true)
+            && max(array_map('mb_strlen', $numbers)) <= 13
+            ?: Json::encode($numbers);
+    });
+
     check('a credit refund names an account, a credit note and a customer', function() use ($refunds, $payments, $refunded, $customerRef) {
         $transaction = $payments->getRefundTransactions($refunded)[0];
         $payload = $refunds->buildCreditRefund($refunded, $transaction, $customerRef, 'creditnote-uid');
@@ -2246,6 +2368,204 @@ try {
         return !$result['ok'] && $posts === 0 ?: "posted $posts invoices; " . Json::encode($result['messages']);
     });
 
+    check('a push waits its turn while another holds the order', function() use ($sync, $knownVariant) {
+        // Completing an order queues more than one job. Two workers that both find the same
+        // `pending` row would both POST; the per-order lock is what stops the second.
+        $order = reload(makeOrder([['variant' => $knownVariant, 'qty' => 1]], 'locked-' . $GLOBALS['suffix'] . '@example.com'));
+        $mutex = Craft::$app->getMutex();
+        $lock = justinholtweb\my\services\Sync::PUSH_LOCK_PREFIX . $order->id;
+
+        if (!$mutex->acquire($lock)) {
+            return 'could not take the lock for the test';
+        }
+
+        mockReset();
+
+        try {
+            $blocked = $sync->pushOrder($order);
+        } finally {
+            $mutex->release($lock);
+        }
+
+        $requests = count(mockJournal());
+        $row = $sync->getInvoiceForOrder($order->id);
+
+        // And once the holder lets go, the same order goes through — the lock is not leaked.
+        $after = $sync->pushOrder($order);
+
+        return !$blocked['ok']
+            && $requests === 0
+            && $row === null
+            && str_contains(implode(' ', $blocked['messages']), 'already running')
+            && $after['ok']
+            ?: "blocked ok=" . var_export($blocked['ok'], true) . ", $requests requests, after ok=" . var_export($after['ok'], true) . ' ' . Json::encode($after['messages']);
+    });
+
+    check('the order screens refuse a user who cannot view the order', function() use ($plugin, $journey) {
+        // My's permissions say what a user may do with MYOB, not which orders they may read; the
+        // push, preview and detail screens all show the customer's details.
+        $controller = new justinholtweb\my\controllers\DocumentsController('documents', $plugin);
+        $method = new ReflectionMethod($controller, 'canAccessOrder');
+        $method->setAccessible(true);
+
+        $nobody = new craft\elements\User(['username' => 'my-nobody-' . $GLOBALS['suffix']]);
+        $admin = new craft\elements\User(['username' => 'my-admin-' . $GLOBALS['suffix'], 'admin' => true]);
+
+        return !$method->invoke($controller, $journey, $nobody)
+            && !$method->invoke($controller, $journey, null)
+            && $method->invoke($controller, $journey, $admin)
+            ?: 'authorisation did not follow Order::canView()';
+    });
+
+    check('sync/retry runs rather than fataling', function() use ($plugin) {
+        // It once called `$this->run($orderIds)` — yii\base\Controller::run(string $route) — and
+        // died with a TypeError the moment anything had failed.
+        // Its progress lines are swallowed: a `✗ order` line in the suite's output reads as a failed check.
+        $controller = new class('sync', $plugin) extends justinholtweb\my\console\controllers\SyncController {
+            public function stdout($string)
+            {
+                return strlen($string);
+            }
+
+            public function stderr($string)
+            {
+                return strlen($string);
+            }
+        };
+        $controller->limit = 1;
+        $controller->queue = false;
+
+        $code = $controller->actionRetry();
+
+        return is_int($code) ?: 'returned ' . var_export($code, true);
+    });
+
+    check('a preview resolves a new customer without creating a card', function() use ($plugin, $knownVariant) {
+        // Preview and --dryRun must not write anything to MYOB.
+        $email = 'preview-new-' . $GLOBALS['suffix'] . '@example.com';
+        $order = reload(makeOrder([['variant' => $knownVariant, 'qty' => 1]], $email));
+
+        mockReset();
+        $ref = $plugin->getContacts()->resolveForOrder($order, true);
+        $payload = $plugin->getInvoices()->buildPayload($order, $ref);
+
+        $writes = array_filter(mockJournal(), static fn($e) => $e['method'] !== 'GET');
+        $remembered = (new craft\db\Query())->from([Table::CONTACTS])->where(['sourceKey' => $email])->exists();
+
+        return $ref['UID'] === justinholtweb\my\services\Contacts::PLACEHOLDER_UID
+            && ($payload['Customer']['UID'] ?? null) === $ref['UID']
+            && $writes === []
+            && !$remembered
+            ?: count($writes) . ' writes; ' . Json::encode($ref) . ($remembered ? '; remembered' : '');
+    });
+
+    check('a forced re-push links the invoice MYOB already has', function() use ($sync, $knownVariant) {
+        // "Push again" on an invoiced order reads the stored UID back rather than POSTing a twin.
+        $order = reload(makeOrder([['variant' => $knownVariant, 'qty' => 1]], 'forced-' . $GLOBALS['suffix'] . '@example.com'));
+        $first = $sync->pushOrder($order);
+        $uid = $first['invoice']?->myobUid;
+
+        mockReset();
+        $again = $sync->pushOrder($order, true);
+
+        $posts = count(array_filter(mockJournal(), static fn($e) => $e['method'] === 'POST' && str_ends_with($e['path'], '/Sale/Invoice/Service')));
+
+        return $first['ok'] && $uid !== null && $again['invoice']?->myobUid === $uid && $posts === 0
+            ?: "posted $posts invoices; uid " . var_export($again['invoice']?->myobUid, true) . ' vs ' . var_export($uid, true);
+    });
+
+    check('a recovery lookup MYOB cannot answer sends nothing', function() use ($sync, $knownVariant) {
+        // The claimed row says an invoice may already be in MYOB. If the lookup times out or 5xxs,
+        // "not found" is not what MYOB said — POSTing anyway is the duplicate recovery prevents.
+        $order = reload(makeOrder([['variant' => $knownVariant, 'qty' => 1]], 'noanswer-' . $GLOBALS['suffix'] . '@example.com'));
+
+        // Push once so the customer card is known, then rewind the invoice to a claim whose
+        // response was lost: pending, attempted once, no UID.
+        $sync->pushOrder($order);
+        $document = $sync->getInvoiceForOrder($order->id);
+
+        if ($document === null) {
+            return 'the first push recorded no invoice';
+        }
+
+        $sync->record($document, ['status' => SyncDocument::STATUS_PENDING, 'myobUid' => null, 'myobNumber' => null, 'attempts' => 1]);
+
+        mockReset();
+        mockControl(['failPath' => '/Sale/Invoice/Service', 'fail' => array_fill(0, 16, 503)]);
+        $result = $sync->pushOrder($order);
+        mockControl(['failPath' => null, 'fail' => []]);
+
+        $journal = mockJournal();
+        $lookups = count(array_filter($journal, static fn($e) => $e['method'] === 'GET' && str_ends_with($e['path'], '/Sale/Invoice/Service')));
+        $posts = count(array_filter($journal, static fn($e) => $e['method'] === 'POST' && str_ends_with($e['path'], '/Sale/Invoice/Service')));
+        $document = $sync->getInvoiceForOrder($order->id);
+
+        return !$result['ok'] && $lookups > 0 && $posts === 0 && $document?->status === SyncDocument::STATUS_PENDING
+            ?: "$lookups lookups, $posts posts; status " . var_export($document?->status, true);
+    });
+
+    check('with MYOB numbering an interrupted push is recovered by the order reference', function() use ($sync, $knownVariant) {
+        // No `Number` to filter on, so `CustomerPurchaseOrderNumber` is the handle.
+        applySettings(['numberSource' => 'myob']);
+
+        try {
+            $order = reload(makeOrder([['variant' => $knownVariant, 'qty' => 1]], 'myobnum-' . $GLOBALS['suffix'] . '@example.com'));
+            $reference = trim((string)$order->reference);
+
+            if ($reference === '') {
+                return 'the fixture order has no reference';
+            }
+
+            mockControl(['fail' => [500, 500, 500, 500, 500, 500, 500, 500]]);
+            $sync->pushOrder($order);
+
+            mockReset();
+            mockControl(['fail' => [], 'recover' => $reference, 'recoverTotal' => 110.00]);
+            $result = $sync->pushOrder($order);
+            mockControl(['fail' => [], 'recover' => null]);
+
+            $posts = count(array_filter(mockJournal(), static fn($e) => $e['method'] === 'POST' && str_ends_with($e['path'], '/Sale/Invoice/Service')));
+
+            return $result['invoice']?->myobUid === 'eeeeeeee-0000-0000-0000-00000000cafe' && $posts === 0
+                ?: "posted $posts invoices; " . Json::encode($result['messages']);
+        } finally {
+            applySettings(['numberSource' => 'reference']);
+        }
+    });
+
+    check('a forced refresh after a 401 defers to a token another worker already replaced', function() {
+        // A 401 must be able to force a refresh before expiry — but if the stored token is no
+        // longer the one that was rejected, someone else refreshed, and refreshing again would
+        // rotate the refresh token out from under them. Checked without the network: this path
+        // must return before any token request.
+        $auth = Plugin::getInstance()->getAuth();
+        $saved = (new craft\db\Query())->from([Table::CONNECTION])->one();
+
+        applySettings(['mode' => Settings::MODE_CLOUD]);
+
+        try {
+            $connection = $auth->getConnection();
+            $connection->mode = Settings::MODE_CLOUD;
+            $connection->accessToken = 'replaced-token';
+            $connection->refreshToken = 'refresh-token';
+            $connection->expiryDate = (new DateTime())->modify('+15 minutes');
+            $auth->saveConnection($connection);
+
+            $after = $auth->refresh(true, 'rejected-token');
+
+            return $after->accessToken === 'replaced-token' ?: 'got ' . var_export($after->accessToken, true);
+        } finally {
+            Craft::$app->getDb()->createCommand()->update(Table::CONNECTION, [
+                'mode' => $saved['mode'],
+                'accessToken' => $saved['accessToken'],
+                'refreshToken' => $saved['refreshToken'],
+                'expiryDate' => $saved['expiryDate'],
+            ], ['id' => $saved['id']])->execute();
+            applySettings(['mode' => Settings::MODE_LOCAL]);
+            (new ReflectionProperty($auth, '_connection'))->setValue($auth, null);
+        }
+    });
+
     // -----------------------------------------------------------------------
     section('Twig');
 
@@ -2287,6 +2607,27 @@ try {
         return true;
     });
 
+    check('no interpolated variable runs into a curly quote', function() {
+        // `"“$reference”"` reads the closing quote's UTF-8 bytes as part of the variable name, so
+        // PHP interpolates an undefined `$reference”` and the message loses the value. Braces fix it.
+        $bad = [];
+        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(dirname(__DIR__, 2) . '/src'));
+
+        foreach ($files as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+
+            foreach (token_get_all((string)file_get_contents($file->getPathname())) as $token) {
+                if (is_array($token) && $token[0] === T_VARIABLE && preg_match('/[\x80-\xff]/', $token[1])) {
+                    $bad[] = basename($file->getPathname()) . ':' . $token[2] . ' ' . $token[1];
+                }
+            }
+        }
+
+        return $bad === [] ?: implode(', ', $bad);
+    });
+
     check('the permissions are registered', function() {
         $permissions = Craft::$app->getUserPermissions()->getAllPermissions();
         $found = [];
@@ -2301,7 +2642,7 @@ try {
             }
         }
 
-        foreach (['my-viewDocuments', 'my-pushOrders', 'my-unlinkDocuments', 'my-viewLog'] as $permission) {
+        foreach (['my-viewDocuments', 'my-pushOrders', 'my-unlinkDocuments', 'my-viewLog', 'my-clearLog'] as $permission) {
             if (!in_array($permission, $found, true)) {
                 return "missing $permission";
             }

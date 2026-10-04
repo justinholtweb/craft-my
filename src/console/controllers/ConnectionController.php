@@ -55,7 +55,8 @@ class ConnectionController extends Controller
     public function actionRefresh(): int
     {
         try {
-            $connection = Plugin::getInstance()->getAuth()->refresh();
+            // Forced, or this would do nothing until the token is already about to expire.
+            $connection = Plugin::getInstance()->getAuth()->refresh(true);
         } catch (MyobApiException $e) {
             $this->stderr($e->getMessage() . "\n", Console::FG_RED);
 

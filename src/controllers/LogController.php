@@ -71,6 +71,9 @@ class LogController extends Controller
     public function actionClear(): Response
     {
         $this->requirePostRequest();
+        // Reading the log and destroying it are different powers: the log is the only record of
+        // what was sent to MYOB, so a view-only user must not be able to erase it.
+        $this->requirePermission('my-clearLog');
 
         $count = Plugin::getInstance()->getLog()->clear();
 

@@ -32,5 +32,6 @@ Initial release.
 
 ### Fixed
 
+- `my/sync/retry` called `$this->run()` — Yii's public `run($route, $params)` — instead of the private `pushEach()`, so it threw a `TypeError` the moment there was anything to retry.
 - The document detail heading glued the MYOB number to the document ID. Twig's `??` binds tighter than `~`, so `document.myobNumber ?? '#' ~ document.id` parsed as `(document.myobNumber ?? '#') ~ document.id`.
 
