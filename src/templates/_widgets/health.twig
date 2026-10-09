@@ -1,0 +1,69 @@
+{# The Dashboard tile. `overview` comes from Alerts::overview(). #}
+{% set stats = overview.stats %}
+
+{% if overview.connected %}
+    <p>
+        <span class="status green" aria-hidden="true"></span>
+        {{ 'Connected to {name}'|t('my', { name: overview.label }) }}
+    </p>
+{% else %}
+    <p class="error">
+        {{ 'My is not connected to MYOB.'|t('my') }}
+        {% if currentUser.admin %}<a href="{{ cpUrl('settings/plugins/my') }}">{{ 'Connect'|t('my') }}</a>{% endif %}
+    </p>
+{% endif %}
+
+{% for incident in overview.incidents %}
+    <p class="error" title="{{ incident.detail }}">{{ incident.label }}</p>
+{% endfor %}
+
+<table class="data fullwidth">
+    <caption class="visually-hidden">{{ 'Documents in the last 7 days'|t('my') }}</caption>
+    <thead>
+        <tr>
+            <th scope="col" colspan="2" class="light">{{ 'Last 7 days'|t('my') }}</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <th scope="row">{{ 'Synced'|t('my') }}</th>
+            <td>{{ stats.synced|number }}</td>
+        </tr>
+        <tr>
+            <th scope="row">{{ 'Pending'|t('my') }}</th>
+            <td>{{ stats.pending|number }}</td>
+        </tr>
+        <tr>
+            <th scope="row">{{ 'Failed'|t('my') }}</th>
+            <td>
+                {% if stats.failed %}
+                    <a href="{{ cpUrl('my/documents', { status: 'failed' }) }}" class="error">{{ stats.failed|number }}</a>
+                {% else %}
+                    <span class="light">0</span>
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <th scope="row">{{ 'Booked at a different total'|t('my') }}</th>
+            <td>
+                {% if overview.mismatched %}
+                    <a href="{{ cpUrl('my/documents', { status: 'mismatch' }) }}" class="error">{{ overview.mismatched|number }}</a>
+                {% else %}
+                    <span class="light">0</span>
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <th scope="row">{{ 'Last successful push'|t('my') }}</th>
+            <td>
+                {% if overview.lastSynced %}
+                    {{ date(overview.lastSynced ~ ' UTC')|timestamp('short') }}
+                {% else %}
+                    <span class="light">{{ 'Never'|t('my') }}</span>
+                {% endif %}
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<p><a href="{{ cpUrl('my/documents') }}">{{ 'Open MYOB documents'|t('my') }}</a></p>

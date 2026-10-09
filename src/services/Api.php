@@ -57,6 +57,14 @@ class Api extends Component
      */
     private ?string $_sentToken = null;
 
+    /**
+     * Extra Guzzle client options, merged over the defaults. Empty in production; the test suite
+     * puts a `MockHandler` stack here (`['handler' => …]`), because the harness has no network.
+     *
+     * @var array<string, mixed>
+     */
+    public array $clientConfig = [];
+
     // Verbs
     // -------------------------------------------------------------------------
 
@@ -264,6 +272,9 @@ class Api extends Component
                 'response' => $raw,
             ]);
 
+            // MYOB accepted the credentials, so any "MYOB refused the connection" alert is over.
+            Plugin::getInstance()->getAlerts()->noteAuthSuccess();
+
             return $this->decode($raw, $response);
         } catch (\Throwable $e) {
             $duration = (int)round((microtime(true) - $started) * 1000);
@@ -301,6 +312,18 @@ class Api extends Component
                 usleep((int)($wait * 1_000_000));
 
                 return $this->send($method, $url, $options, $attempt + 1);
+            }
+
+            // Still refused after a fresh token (or, in local mode, refused at all): the token is
+            // fine and what stands behind it is not — a revoked grant, or the wrong company file
+            // login. Nothing will be pushed until somebody fixes it, so somebody has to be told.
+            if ($exception->statusCode === 401) {
+                Plugin::getInstance()->getAlerts()->noteAuthFailure(
+                    Craft::t('my', 'MYOB answered 401 to {endpoint}: {message}', [
+                        'endpoint' => $this->shorten($url),
+                        'message' => $exception->getMessage(),
+                    ])
+                );
             }
 
             $log->write($action, [
@@ -412,11 +435,11 @@ class Api extends Component
 
     private function client(): Client
     {
-        return Craft::createGuzzleClient([
+        return Craft::createGuzzleClient(array_merge([
             'timeout' => Plugin::getInstance()->getSettings()->timeout,
             // Cross-host redirects would leak the Authorization header.
             'allow_redirects' => false,
-        ]);
+        ], $this->clientConfig));
     }
 
     /**

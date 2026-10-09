@@ -38,6 +38,8 @@ contact cards, payments are applied, refunds become credit notes. Distributed as
 - `{{%my_connection}}` — one row: tokens, expiry, company file.
 - `{{%my_contacts}}` — email → MYOB customer UID.
 - `{{%my_log}}` — the connection log, with payloads, credentials redacted.
+- `{{%my_alerts}}` — failure-alert latches, one row per incident, unique on `incident` (5.1.0).
+- `{{%my_digests}}` — the sync summary's "last sent" marker, one row (`handle = summary`) (5.1.0).
 
 **Claim before the call, never after.** A crash between the two leaves a `pending` row, which is
 the signal to ask MYOB whether the document exists (`$filter=Number eq '…'`) rather than blindly
@@ -92,6 +94,50 @@ The prime directive is that MYOB books what the customer paid.
 - An adjustment naming a line item that is not on the order is deliberately **not** absorbed. It is
   a Commerce data problem, and reconciliation refusing the push is how the merchant finds out.
 
+### Failure alerts (ported from Erpy via Zo, 2026-10-09)
+
+`services\Alerts` is a copy of craft-erpy's reference (its CLAUDE.md, "Failure alerts"), by way of
+craft-zo, with the connection dimension dropped. Three incidents: **failures** (ledger rows
+`failed`, by `dateUpdated` inside `alertWindowMinutes`, threshold to open, a whole quiet window to
+close), **mismatch** (`Sync::mismatchCondition()` — a `synced` row that still carries
+`verifyAgainstOrder()`'s complaint in `lastError` — by `dateSynced` inside the window), **auth** (a
+pushed signal). Hooks: `Sync::pushOrder()` wraps the real work (`pushOrderSerialised()`) and calls
+`afterSync()` in a `finally`; `Api::send()` signals a 401 that reaches the final error branch (after
+the forced refresh in cloud mode; at once in local mode) and calls `noteAuthSuccess()` on every
+success; `Auth::refresh()` signals a 4xx from the token endpoint (`invalid_grant` etc. — never a
+network failure or a 5xx). `check()` does nothing until `Connection::isConnected()`. Retryable
+failures stay `pending` and never alert — only what the queue gave up on does. A CP banner
+(`Cp::EVENT_REGISTER_ALERTS`) shows every open incident to `my-viewDocuments`. Do not change when
+touching it: the conditional-UPDATE claim/release, redaction before anything leaves, the webhook
+through `webhookTarget()` (`helpers\Ip` is the family copy — keep it identical), the HMAC header
+(`X-My-Signature`), every path fail-open.
+
+`Api::$clientConfig` and `Auth::$clientConfig` are merged into the Guzzle client options. Empty in
+production; the alert/order/digest suites put a `MockHandler` stack there.
+
+### Order status (Orders index column and condition rule)
+
+`services\OrderStatus::statuses()` (PHP, one query per batch) and `::condition()` (SQL, for
+`MyobStatusConditionRule::modifyQuery()`) define the same six sets in the same precedence — failed
+(any document) > mismatch > synced > pending > skipped (all three by the invoice row) > none — and
+`tests/integration/orders.php` holds them to partitioning the fixtures identically. Change one,
+change both. The column prefetches the whole page from `$order->elementQueryResult` on the first
+cell. The rule is registered unconditionally. `PushToMyob` queues **unforced** `PushOrder` jobs,
+re-checks `my-pushOrders`, refuses when not connected, and skips carts and orders the user cannot
+`canView()` — the same rule as the order panel's Push now.
+
+### Sync summary (ported from Yarn, 2026-10-09)
+
+`services\Digest` is a copy of craft-yarn's reference (its CLAUDE.md, "Scheduled digests"):
+`helpers\Mailer`, `queue\jobs\SendDigest`, `console\controllers\DigestController`,
+`controllers\DigestController`, `events\DigestEvent` and the marker table are the generic part.
+My's part: recipients are **`recipientList()` — the alert recipients**, there is no separate list;
+`collect()` keys every failed/mismatched document as `doc:<id>:<state>` (new = not in last `seen`);
+`activity($since)` counts synced documents by type and invoice totals per currency since the last
+send (or one period back); a period is "nothing new" only when there are no new problems **and**
+no activity. The test button posts over Ajax (`data-my-action`), never a form — the settings screen
+is one.
+
 ## Traps found while building this
 
 - **`yii\base\Controller::run()` is public, so a private `run()` on a console controller is a
@@ -119,6 +165,11 @@ The prime directive is that MYOB books what the customer paid.
   minutes later, in code with nothing to do with either. Start long-running helpers *before* the
   Craft bootstrap.
 - **`_includes/statuses` does not exist in Craft 5** (inherited note from the sibling plugins).
+- **Commerce's Orders index 500s for a non-admin with no `editSite:<uid>` permission** —
+  `OrderElementTrait::defineActions()` calls `Cp::requestedSite()->getStore()`, and the requested
+  site is null when the user may edit none. HTTP tests of the index need that permission.
+- **A captured email's wire form is quoted-printable.** Read
+  `$message->getSymfonyEmail()->getTextBody()` in tests, never `toString()`.
 
 See `[[craft-plugin-gotchas]]` in the shared memory for family-wide traps, and
 `[[project_craft_shipper]]` / `[[project_craft_freshh]]` for the sibling Commerce integrations
@@ -130,7 +181,10 @@ No local PHP on this Mac. Everything runs inside the plugin-testing container:
 
 ```sh
 cd ~/Sites/plugin-testing
-ddev exec php /var/www/craft-my/tests/integration/checks.php   # 217 checks
+ddev exec php /var/www/craft-my/tests/integration/checks.php   # 231 checks
+docker exec -w /var/www/html ddev-plugin-testing-web php /var/www/craft-my/tests/integration/alerts.php  # 59: latch, mail, SSRF, webhook, auth signals, banner, widget, console, test action over HTTP
+docker exec -w /var/www/html ddev-plugin-testing-web php /var/www/craft-my/tests/integration/orders.php  # 22: status sets vs SQL, condition rule, column + action in process and over HTTP
+docker exec -w /var/www/html ddev-plugin-testing-web php /var/www/craft-my/tests/integration/digest.php  # 34: schedule, marker claim/release, email, fallback, console, test action over HTTP
 ddev exec bash -c 'find /var/www/craft-my/src -name "*.php" -print0 | xargs -0 -n1 php -l'
 ```
 
@@ -143,6 +197,10 @@ endpoint queues failures, which is how the retry, backoff and recovery paths are
 
 The suite is idempotent and self-cleaning: fixtures, ledger rows, log rows and settings are all
 restored in a `finally`.
+
+`alerts.php`, `orders.php` and `digest.php` share `tests/integration/_support.php`: settings in
+memory only, MYOB mocked with Guzzle's `MockHandler` on the `clientConfig` seams, the harness's
+connection row and digest marker snapshotted and put back, fixtures removed in a shutdown function.
 
 **Harness note:** `craft-penny` registers an `Elements::EVENT_BEFORE_SAVE_ELEMENT` handler typed
 `ModelEvent` while Craft passes an `ElementEvent`, so **every element save fatals** while it is

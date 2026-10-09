@@ -206,6 +206,21 @@ number and status, and any error. Users with the **Push orders to MYOB** permiss
   sent.
 - **Preview.** Shows the payload. See [Preview](#preview).
 
+## The Orders index
+
+Commerce's Orders index gets a **MYOB** column (a status dot, the status and the MYOB invoice
+number), a **MYOB status** filter that also works in custom sources, and a **Push to MYOB** bulk
+action that queues the selected completed orders. The action never re-sends an invoiced order; it
+picks up missing payments and credit notes and retries what failed. See
+[Alerts and the sync summary](alerts.md#the-orders-index) for what each status means.
+
+## Alerts, the summary and the widget
+
+My emails the people you nominate when pushes start failing, when MYOB books an invoice at a
+different total, or when MYOB refuses the connection — once when it starts and once when it
+clears — and can send them a weekly sync summary. The **MYOB health** Dashboard widget shows the
+same picture. See [Alerts and the sync summary](alerts.md).
+
 ## Unlinking
 
 On a document's detail page, **Unlink from MYOB** (with the **Unlink documents from MYOB**
@@ -240,13 +255,14 @@ the detail says which field. My keeps both, everywhere it shows an error.
 
 | Permission | Allows |
 |---|---|
-| **View synced documents** | The Documents screen and the MYOB panel on orders |
-| ↳ **Push orders to MYOB** | Push, Push again and Preview on the order panel |
+| **View synced documents** | The Documents screen, the MYOB panel on orders, the MYOB column on the Orders index, the MYOB health widget and the alert banner |
+| ↳ **Push orders to MYOB** | Push, Push again and Preview on the order panel, and the **Push to MYOB** bulk action |
 | ↳ **Unlink documents from MYOB** | Unlink on a document's detail page |
 | **View the connection log** | The Log screen |
 | ↳ **Clear the connection log** | The **Clear the log** button on the Log screen, which is hidden without it. Reading the log and erasing it are separate powers |
 
-Settings, connecting and disconnecting need an admin.
+Settings, connecting and disconnecting need an admin, and so do **Send a test alert** and **Send a
+test summary now**, which live on the settings screen.
 
 The MYOB permissions say what a user may do with MYOB, not which orders they may see. Pushing,
 previewing and opening a document's detail page also need permission to view that order in

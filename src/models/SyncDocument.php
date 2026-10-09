@@ -23,6 +23,12 @@ class SyncDocument extends Model
     public const STATUS_SKIPPED = 'skipped';
 
     /**
+     * Not a stored status. A `synced` row that still carries an error is one MYOB booked at a
+     * different total from the order; this names that state for filters and the Orders index.
+     */
+    public const STATUS_MISMATCH = 'mismatch';
+
+    /**
      * The `sourceKey` used for the one invoice an order gets. Payments and refunds key on their
      * Commerce transaction hash instead.
      */
@@ -59,6 +65,14 @@ class SyncDocument extends Model
     public function isSynced(): bool
     {
         return $this->status === self::STATUS_SYNCED && $this->myobUid !== null;
+    }
+
+    /**
+     * In MYOB, but at a different total from the order. See {@see \justinholtweb\my\services\Sync::mismatchCondition()}.
+     */
+    public function isMismatched(): bool
+    {
+        return $this->status === self::STATUS_SYNCED && $this->lastError !== null && $this->lastError !== '';
     }
 
     public function getTypeLabel(): string

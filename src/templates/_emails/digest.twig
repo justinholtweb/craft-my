@@ -1,0 +1,81 @@
+{#
+    The MYOB sync summary, HTML half. Rendered by helpers/Mailer in control-panel template mode.
+    Inline styles on purpose: this is an email, and mail clients drop <style> blocks and every
+    stylesheet the control panel has.
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>{{ "MYOB sync summary"|t('my') }}</title>
+</head>
+<body style="margin:0;padding:24px;background:#f3f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2933;font-size:15px;line-height:1.5;">
+<div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:6px;padding:24px;">
+    {% if isTest %}
+        <p style="margin:0 0 16px;padding:8px 12px;background:#fff8e1;border-radius:4px;font-size:13px;">
+            {{ "This is a test. It shows what the next summary would say; the real one will still go out on schedule."|t('my') }}
+        </p>
+    {% endif %}
+
+    <h1 style="margin:0 0 4px;font-size:20px;">{{ "MYOB sync summary for {site}"|t('my', { site: siteName }) }}</h1>
+    <p style="margin:0 0 20px;color:#606d7b;font-size:13px;">
+        {{ "Since {date}."|t('my', { date: since|datetime('short') }) }}
+        {% if connected %}
+            {{ "Company file: {name}."|t('my', { name: companyFile }) }}
+        {% endif %}
+    </p>
+
+    {% if not connected %}
+        <p style="margin:0 0 16px;padding:8px 12px;background:#fdecea;border-radius:4px;">
+            {{ "My is not connected to MYOB, so nothing is being pushed."|t('my') }}
+            <a href="{{ settingsUrl }}">{{ "Connect it"|t('my') }}</a>
+        </p>
+    {% endif %}
+
+    {% for incident in incidents %}
+        <p style="margin:0 0 8px;padding:8px 12px;background:#fdecea;border-radius:4px;">{{ "Open alert: {label}"|t('my', { label: incident }) }}</p>
+    {% endfor %}
+
+    <table role="presentation" style="width:100%;border-collapse:collapse;margin:0 0 20px;font-size:14px;">
+        <tr><td style="padding:4px 0;color:#3e4c59;">{{ "Invoices"|t('my') }}</td><td style="padding:4px 0;text-align:right;font-weight:600;">{{ activity.invoices|number }}{% if invoiced is not empty %} <span style="font-weight:400;color:#606d7b;">({{ invoiced|join(', ') }})</span>{% endif %}</td></tr>
+        <tr><td style="padding:4px 0;color:#3e4c59;">{{ "Payments"|t('my') }}</td><td style="padding:4px 0;text-align:right;font-weight:600;">{{ activity.payments|number }}</td></tr>
+        <tr><td style="padding:4px 0;color:#3e4c59;">{{ "Credit notes"|t('my') }}</td><td style="padding:4px 0;text-align:right;font-weight:600;">{{ activity.creditNotes|number }}</td></tr>
+        <tr><td style="padding:4px 0;color:#3e4c59;">{{ "Credit refunds"|t('my') }}</td><td style="padding:4px 0;text-align:right;font-weight:600;">{{ activity.refunds|number }}</td></tr>
+        <tr><td style="padding:4px 0;color:#3e4c59;">{{ "Still failed"|t('my') }}</td><td style="padding:4px 0;text-align:right;font-weight:600;{{ failedCount ? 'color:#cf1124;' }}">{{ failedCount|number }}</td></tr>
+        <tr><td style="padding:4px 0;color:#3e4c59;">{{ "Booked at a different total"|t('my') }}</td><td style="padding:4px 0;text-align:right;font-weight:600;{{ mismatchCount ? 'color:#b44d12;' }}">{{ mismatchCount|number }}</td></tr>
+    </table>
+
+    {% if newCount %}
+        <h2 style="margin:0 0 12px;font-size:16px;">{{ "{count, plural, =1{One new problem} other{# new problems}}"|t('my', { count: newCount }) }}</h2>
+        {% for item in items %}
+            <div style="margin:0 0 14px;padding:0 0 14px;border-bottom:1px solid #e3e5e8;">
+                <div style="font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:{{ item.state == 'failed' ? '#cf1124' : '#b44d12' }};">
+                    {{ item.state == 'failed' ? "Failed"|t('my') : "Booked at a different total"|t('my') }} · {{ item.type }}
+                </div>
+                <div style="font-weight:600;margin:2px 0;">
+                    <a href="{{ item.url }}" style="color:#1f2933;">{{ "Order {order}"|t('my', { order: item.order }) }}{% if item.number %} · {{ item.number }}{% endif %}</a>
+                </div>
+                {% if item.error %}<div style="color:#3e4c59;font-size:14px;">{{ item.error }}</div>{% endif %}
+            </div>
+        {% endfor %}
+        {% if more %}
+            <p style="margin:0 0 16px;">{{ "… and {count} more."|t('my', { count: more|number }) }}</p>
+        {% endif %}
+    {% elseif failedCount or mismatchCount %}
+        <p style="margin:0 0 16px;">{{ "Nothing new went wrong. The documents above were already in the last summary and still need a look."|t('my') }}</p>
+    {% else %}
+        <p style="margin:0 0 16px;">{{ "Nothing needs attention."|t('my') }}</p>
+    {% endif %}
+
+    <p style="margin:0 0 20px;">
+        <a href="{{ failedCount ? failedUrl : documentsUrl }}" style="display:inline-block;padding:8px 14px;background:#1d4ed8;color:#ffffff;border-radius:4px;text-decoration:none;">{{ "Open MYOB documents"|t('my') }}</a>
+    </p>
+
+    <p style="margin:0;color:#7b8794;font-size:12px;">
+        {{ "This summary goes to the people who get My’s failure alerts. Change who gets it, or when, in My’s settings:"|t('my') }}
+        <a href="{{ settingsUrl }}" style="color:#7b8794;">{{ settingsUrl }}</a>
+    </p>
+</div>
+</body>
+</html>

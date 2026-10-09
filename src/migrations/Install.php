@@ -20,6 +20,11 @@ class Install extends Migration
         $this->createIndexes();
         $this->addForeignKeys();
 
+        // Failure alerts and the sync summary (5.1.0). Defined once, in the migration that added
+        // them, so a fresh install and an upgrade end up with the same columns.
+        m261009_000000_alerts_and_digest::createAlertsTable($this);
+        m261009_000000_alerts_and_digest::createDigestsTable($this);
+
         return true;
     }
 
@@ -28,6 +33,8 @@ class Install extends Migration
      */
     public function safeDown(): bool
     {
+        $this->dropTableIfExists(Table::DIGESTS);
+        $this->dropTableIfExists(Table::ALERTS);
         $this->dropTableIfExists(Table::LOG);
         $this->dropTableIfExists(Table::CONTACTS);
         $this->dropTableIfExists(Table::DOCUMENTS);

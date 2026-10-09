@@ -22,6 +22,14 @@ $79 a year for updates.
 - **Refunds → credit notes.** Optionally paid back out of a nominated bank account.
 - **Both MYOB transports.** The cloud API over OAuth 2, and an on-premise AccountRight local
   server over HTTP Basic.
+- **Somebody hears about it.** One email (and optionally a Slack or Teams message) when pushes
+  start failing, when MYOB books an invoice at a different total, or when MYOB refuses the
+  connection — and one when it clears. A lapsed refresh token also puts a banner across the
+  control panel, because it silently stops every invoice.
+- **A weekly sync summary** to the same people: invoices, payments and credit notes that went
+  through, and anything still waiting for a human.
+- **MYOB on the Orders index.** A MYOB column (status and invoice number), a "MYOB status" filter
+  for custom sources, and a bulk *Push to MYOB* action. Plus a *MYOB health* Dashboard widget.
 
 ## The part that actually matters
 
@@ -118,6 +126,11 @@ php craft my/reference/tax-codes
 php craft my/reference/item <number>
 php craft my/reference/refresh
 
+php craft my/alerts/check                # evaluate failure alerts, send what is owed
+php craft my/alerts/test                 # a sample alert through every configured channel
+php craft my/digest/send                 # the sync summary, for cron; sends once per period
+php craft my/digest/status
+
 php craft my/log/index 50                # the most recent entries
 php craft my/log/prune --days=30
 php craft my/log/clear
@@ -127,6 +140,22 @@ php craft my/log/clear
 prints is what MYOB would receive — not a reassuring approximation. The CP order panel's *Preview*
 button does the same thing. Both are read-only: nothing is created in MYOB, not even a customer
 card — a customer with no card yet shows as the placeholder `new-card-created-on-push`.
+
+## Alerts and the sync summary
+
+Set the recipients under **Alerts** on the settings screen (addresses or an environment variable;
+an optional Slack/Teams/JSON webhook goes through an SSRF guard and can be HMAC-signed). Three
+incidents, each a latch so it alerts once and recovers once:
+
+- **Orders failing to push** — documents left `failed` after the queue gave up.
+- **Invoices booked at a different total** — the push worked, the books are wrong.
+- **MYOB refused the connection** — a refused refresh token, or a 401 a fresh token did not fix.
+
+Every push checks for the first two, MYOB refusing the connection is noticed the moment it
+happens, and `my/alerts/check` (or `my/sync/retry`) from cron notices an incident clearing on a
+quiet day. The **sync summary** goes to the same recipients, weekly or daily, from
+`my/digest/send` in cron or — on sites without cron — from the queue after a web request. See
+`docs/alerts.md`.
 
 ## Twig
 
@@ -143,7 +172,9 @@ card — a customer with no card yet shows as the placeholder `new-card-created-
 ## Permissions
 
 `View synced documents`, and nested under it `Push orders to MYOB` and `Unlink documents from
-MYOB`; plus `View the connection log`. Unlinking forgets the link on the Craft side and never
+MYOB`; plus `View the connection log`. The Orders index column, the Dashboard widget and the
+alert banner need `View synced documents`; the bulk *Push to MYOB* action needs `Push orders to
+MYOB`. The test-alert and test-summary buttons are on the settings screen, so admins only. Unlinking forgets the link on the Craft side and never
 deletes anything in MYOB — an invoice reconciled against a bank feed cannot be deleted anyway.
 
 ## What it does not do
@@ -154,14 +185,20 @@ Inventory and stock write-back into Commerce, purchase orders, and MYOB Acumatic
 
 ## Testing
 
-217 integration checks, most of them run against a mock MYOB API over real HTTP, so the client is
+231 integration checks, most of them run against a mock MYOB API over real HTTP, so the client is
 exercised where the interesting bugs live — header assembly, OData filters, paging, `returnBody`,
 retry and backoff, error parsing. The mock totals invoices itself, so "did MYOB book what the
 customer paid" is answered by something other than the code under test.
 
+Alerts, the Orders index and the summary have their own suites, with MYOB mocked by Guzzle's
+`MockHandler`:
+
 ```sh
 cd ~/Sites/plugin-testing
 ddev exec php /var/www/craft-my/tests/integration/checks.php
+ddev exec php /var/www/craft-my/tests/integration/alerts.php
+ddev exec php /var/www/craft-my/tests/integration/orders.php
+ddev exec php /var/www/craft-my/tests/integration/digest.php
 ```
 
 ## License

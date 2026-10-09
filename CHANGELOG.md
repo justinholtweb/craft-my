@@ -1,5 +1,30 @@
 # Release Notes for My
 
+## Unreleased
+
+### Added
+
+- Failure alerts. One email — and optionally a Slack, Teams or signed JSON webhook — when pushes
+  start failing, when MYOB books an invoice at a different total from the order, or when MYOB
+  refuses the connection (a refused refresh token, or a 401 a fresh token did not fix); one more
+  when it clears. Each incident is a latch, so a hundred failures are one message, and a flapping
+  connection waits out a quiet period. Checked after every push, the moment MYOB refuses the
+  connection, and by `my/alerts/check` and `my/sync/retry`. Webhooks go through the family SSRF
+  guard and never follow redirects; alert bodies are redacted before they leave.
+- A banner across the control panel while an alert is open — above all for a dead refresh token,
+  which otherwise stops every invoice without a sound.
+- A **MYOB health** Dashboard widget: connection, the last seven days of the ledger, invoices
+  booked at a different total, the last successful push and any open alert.
+- A weekly (or daily) **sync summary** to the alert recipients: what went to MYOB, what is still
+  failed, and each new problem since the last one. Sent from `my/digest/send` on cron, or from the
+  queue after a web request on sites without cron; once per period, claimed in the database.
+  `my/digest/status`, and **Send a test summary now** on the settings screen.
+- A **MYOB** column on Commerce's Orders index (status and invoice number), a **MYOB status**
+  condition rule for filters and custom sources, and a **Push to MYOB** bulk action for people
+  with *Push orders to MYOB*.
+- The documents screen can be filtered to invoices booked at a different total.
+- `my/alerts/check` and `my/alerts/test`.
+
 ## 5.0.0 — 2026-08-20
 
 Initial release.

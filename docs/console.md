@@ -146,6 +146,45 @@ Accounts and tax codes are cached for 24 hours. Run `my/reference/refresh` after
 MYOB. `my/reference/item` exits `65` if there's no item with that number, which is the quickest way
 to check why an Item-layout line fell back to the sales account.
 
+## Alerts and the sync summary
+
+### my/alerts/check
+
+Evaluate every incident — pushes failing, invoices booked at a different total, MYOB refusing the
+connection — and send any alert or recovery that is owed. Every push already checks the first two,
+and a refused connection is noticed the moment it happens; cron running this is what notices an
+incident *clearing* on a quiet day. `my/sync/retry` runs the same check after its retries.
+
+```sh
+php craft my/alerts/check
+```
+
+Exits `0` whether or not anything is open: an open incident is news, not a failure of the command,
+and cron would otherwise email you about the alert on top of the alert.
+
+### my/alerts/test
+
+Send a sample alert through every configured channel, using the saved settings. Exits `78`
+(configuration) when there are no recipients and no webhook.
+
+### my/digest/send
+
+The sync summary, for cron. Run it as often as you like; it sends once per period, and only once
+the configured day and hour have arrived.
+
+```sh
+0,15,30,45 * * * * php /path/to/craft my/digest/send
+php craft my/digest/send --force    # now, whatever the schedule says
+```
+
+Exits `0` for every outcome that is not a fault (not due, already sent, nothing to report,
+switched off), `78` when it is switched on but has no valid recipients, and `1` when the send
+failed — the next run tries again.
+
+### my/digest/status
+
+The schedule: enabled, frequency, recipients, last period, last run, last send and next due.
+
 ## The log
 
 ```sh

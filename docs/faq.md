@@ -63,6 +63,14 @@ My never sends a total. It sends lines and lets MYOB add them up, checks that su
 before sending, and checks what MYOB booked afterwards. By default, a payload that doesn't add up to
 the order total isn't sent. See [Reconciliation](usage#reconciliation).
 
+### Will I know if pushes stop working?
+
+Yes. Set recipients under **Alerts** and My emails them (and optionally Slack or Teams) when pushes
+start failing, when MYOB books an invoice at a different total, or when MYOB refuses the
+connection — once when it starts and once when it clears. A dead refresh token also puts a banner
+across the control panel. A weekly sync summary and a **MYOB health** Dashboard widget show the
+same picture. See [Alerts and the sync summary](alerts.md).
+
 ### Can I see what will be sent before it's sent?
 
 Yes. **Preview** on the order's MYOB panel, or `php craft my/sync/order <reference> --dryRun`. Both

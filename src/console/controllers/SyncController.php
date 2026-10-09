@@ -157,13 +157,29 @@ class SyncController extends Controller
 
         if ($orderIds === []) {
             $this->stdout("Nothing has failed.\n", Console::FG_GREEN);
+            $this->checkAlerts();
 
             return ExitCode::OK;
         }
 
         $this->stdout(count($orderIds) . " orders to retry.\n");
 
-        return $this->pushEach(array_values($orderIds));
+        $code = $this->pushEach(array_values($orderIds));
+        $this->checkAlerts();
+
+        return $code;
+    }
+
+    /**
+     * Cron runs `retry` when nothing else is running, so it is where an incident is seen to clear.
+     */
+    private function checkAlerts(): void
+    {
+        foreach (Plugin::getInstance()->getAlerts()->check() as $result) {
+            if ($result['transition'] !== null) {
+                $this->stdout(sprintf("Alert %s: %s\n", $result['transition'], $result['incident']), Console::FG_YELLOW);
+            }
+        }
     }
 
     /**

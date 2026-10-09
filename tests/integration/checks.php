@@ -2804,6 +2804,8 @@ try {
         Craft::$app->getDb()->createCommand()->delete(Table::CONNECTION)->execute();
         Craft::$app->getDb()->createCommand()->delete(Table::CONTACTS)->execute();
         Craft::$app->getDb()->createCommand()->delete(Table::LOG)->execute();
+        // Failures this run made on purpose would otherwise leave alert latches open.
+        Craft::$app->getDb()->createCommand()->delete(Table::ALERTS)->execute();
         Plugin::getInstance()->getReference()->flush();
     } catch (Throwable $e) {
         echo '  ! could not clear My’s tables: ' . $e->getMessage() . "\n";

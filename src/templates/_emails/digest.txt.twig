@@ -1,0 +1,46 @@
+{%- autoescape false -%}
+{% if isTest %}{{ "This is a test. It shows what the next summary would say; the real one will still go out on schedule."|t('my') }}
+
+{% endif %}
+{{ "MYOB sync summary for {site}"|t('my', { site: siteName }) }}
+{{ "Since {date}."|t('my', { date: since|datetime('short') }) }}{% if connected %} {{ "Company file: {name}."|t('my', { name: companyFile }) }}{% endif %}
+
+{% if not connected %}
+{{ "My is not connected to MYOB, so nothing is being pushed."|t('my') }} {{ settingsUrl }}
+{% endif %}
+{% for incident in incidents %}
+{{ "Open alert: {label}"|t('my', { label: incident }) }}
+{% endfor %}
+
+{{ "Invoices"|t('my') }}: {{ activity.invoices|number }}{% if invoiced is not empty %} ({{ invoiced|join(', ') }}){% endif %}
+
+{{ "Payments"|t('my') }}: {{ activity.payments|number }}
+{{ "Credit notes"|t('my') }}: {{ activity.creditNotes|number }}
+{{ "Credit refunds"|t('my') }}: {{ activity.refunds|number }}
+{{ "Still failed"|t('my') }}: {{ failedCount|number }}
+{{ "Booked at a different total"|t('my') }}: {{ mismatchCount|number }}
+
+{% if newCount -%}
+{{ "{count, plural, =1{One new problem} other{# new problems}}"|t('my', { count: newCount }) }}
+
+{% for item in items -%}
+[{{ item.state == 'failed' ? "Failed"|t('my') : "Booked at a different total"|t('my') }}] {{ item.type }} · {{ "Order {order}"|t('my', { order: item.order }) }}{% if item.number %} · {{ item.number }}{% endif %}
+
+{% if item.error %}  {{ item.error }}
+{% endif %}  {{ item.url }}
+
+{% endfor -%}
+{% if more %}{{ "… and {count} more."|t('my', { count: more|number }) }}
+
+{% endif -%}
+{%- elseif failedCount or mismatchCount -%}
+{{ "Nothing new went wrong. The documents above were already in the last summary and still need a look."|t('my') }}
+
+{% else -%}
+{{ "Nothing needs attention."|t('my') }}
+
+{% endif -%}
+{{ "Open MYOB documents"|t('my') }}: {{ failedCount ? failedUrl : documentsUrl }}
+
+{{ "This summary goes to the people who get My’s failure alerts. Change who gets it, or when, in My’s settings:"|t('my') }} {{ settingsUrl }}
+{% endautoescape -%}

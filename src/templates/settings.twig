@@ -619,6 +619,204 @@
     }) }}
 </div>
 
+{# -------------------------------------------------------------------- Alerts #}
+<hr>
+<h2>{{ 'Alerts'|t('my') }}</h2>
+
+<p class="light">{{ 'One message when something goes wrong, one when it has cleared — never one per failure. Checked after every push, the moment MYOB refuses the connection, and by `php craft my/alerts/check`.'|t('my') }}</p>
+
+{{ forms.autosuggestField({
+    label: 'Email alerts to'|t('my'),
+    instructions: 'Addresses separated by commas, or an environment variable. Leave empty for no email. The sync summary goes to the same people.'|t('my'),
+    id: 'alertRecipients',
+    name: 'alertRecipients',
+    suggestEnvVars: true,
+    value: settings.alertRecipients,
+    errors: settings.getErrors('alertRecipients'),
+}) }}
+
+{{ forms.autosuggestField({
+    label: 'Slack or Teams webhook URL'|t('my'),
+    instructions: 'Optional. An incoming-webhook URL — best kept in an environment variable, because the URL is the credential. Only public hosts are allowed and redirects are never followed.'|t('my'),
+    id: 'alertWebhookUrl',
+    name: 'alertWebhookUrl',
+    suggestEnvVars: true,
+    value: settings.alertWebhookUrl,
+    errors: settings.getErrors('alertWebhookUrl'),
+}) }}
+
+{{ forms.selectField({
+    label: 'Webhook format'|t('my'),
+    id: 'alertWebhookFormat',
+    name: 'alertWebhookFormat',
+    options: [
+        { value: 'slack', label: 'Slack'|t('my') },
+        { value: 'teams', label: 'Microsoft Teams'|t('my') },
+        { value: 'json', label: 'Plain JSON (your own receiver)'|t('my') },
+    ],
+    value: settings.alertWebhookFormat,
+    errors: settings.getErrors('alertWebhookFormat'),
+}) }}
+
+{{ forms.autosuggestField({
+    label: 'Webhook signing secret'|t('my'),
+    instructions: 'Optional. When set, each webhook carries `X-My-Timestamp` and `X-My-Signature: sha256=…`, an HMAC of `timestamp.body`, so your own receiver can verify it. Slack and Teams ignore it.'|t('my'),
+    id: 'alertWebhookSecret',
+    name: 'alertWebhookSecret',
+    suggestEnvVars: true,
+    value: settings.alertWebhookSecret,
+}) }}
+
+{{ forms.lightswitchField({
+    label: 'Alert when pushes fail'|t('my'),
+    instructions: 'Invoices, payments, credit notes or refunds left failed for a human — after the queue has stopped retrying.'|t('my'),
+    id: 'alertOnFailures',
+    name: 'alertOnFailures',
+    on: settings.alertOnFailures,
+    toggle: 'my-alert-failures',
+}) }}
+
+<div id="my-alert-failures" class="{{ settings.alertOnFailures ? '' : 'hidden' }}">
+    {{ forms.textField({
+        label: 'Failures that open an alert'|t('my'),
+        instructions: 'This many failures inside the window below. It closes again after a whole window with none.'|t('my'),
+        id: 'alertFailureThreshold',
+        name: 'alertFailureThreshold',
+        type: 'number',
+        size: 5,
+        value: settings.alertFailureThreshold,
+        errors: settings.getErrors('alertFailureThreshold'),
+    }) }}
+</div>
+
+{{ forms.lightswitchField({
+    label: 'Alert when MYOB books a different total'|t('my'),
+    instructions: 'The invoice went through, but MYOB’s total disagrees with the order — usually a tax code on the wrong rate.'|t('my'),
+    id: 'alertOnMismatch',
+    name: 'alertOnMismatch',
+    on: settings.alertOnMismatch,
+}) }}
+
+{{ forms.textField({
+    label: 'Window'|t('my'),
+    instructions: 'Minutes. Failures and mismatched invoices are counted inside it; an incident clears after a whole window with nothing new.'|t('my'),
+    id: 'alertWindowMinutes',
+    name: 'alertWindowMinutes',
+    type: 'number',
+    size: 5,
+    value: settings.alertWindowMinutes,
+    errors: settings.getErrors('alertWindowMinutes'),
+}) }}
+
+{{ forms.lightswitchField({
+    label: 'Alert when MYOB refuses the connection'|t('my'),
+    instructions: 'A refused refresh token, or a 401 that refreshing did not fix. Nothing is pushed until somebody reconnects; a banner also shows across the control panel.'|t('my'),
+    id: 'alertOnAuthFailure',
+    name: 'alertOnAuthFailure',
+    on: settings.alertOnAuthFailure,
+}) }}
+
+{{ forms.textField({
+    label: 'Quiet period after a recovery'|t('my'),
+    instructions: 'Minutes. An incident that comes straight back is reported when this ends, if it is still happening — so a flapping connection cannot fill an inbox.'|t('my'),
+    id: 'alertCooldownMinutes',
+    name: 'alertCooldownMinutes',
+    type: 'number',
+    size: 5,
+    value: settings.alertCooldownMinutes,
+    errors: settings.getErrors('alertCooldownMinutes'),
+}) }}
+
+<div class="field">
+    <div class="flex flex-wrap">
+        <button type="button" class="btn" data-my-action="my/alerts/test" data-my-result-for="alert-test">{{ 'Send a test alert'|t('my') }}</button>
+        <span class="light" data-my-result="alert-test" role="status" aria-live="polite">{{ 'Uses the saved settings — save first.'|t('my') }}</span>
+    </div>
+</div>
+
+{# -------------------------------------------------------------- Sync summary #}
+<hr>
+<h2>{{ 'Sync summary'|t('my') }}</h2>
+
+{{ forms.lightswitchField({
+    label: 'Email a sync summary'|t('my'),
+    instructions: 'What went to MYOB, what did not, and what still needs a look — to the alert recipients above.'|t('my'),
+    id: 'digestEnabled',
+    name: 'digestEnabled',
+    on: settings.digestEnabled,
+    toggle: 'my-digest',
+}) }}
+
+<div id="my-digest" class="{{ settings.digestEnabled ? '' : 'hidden' }}">
+    {{ forms.selectField({
+        label: 'How often'|t('my'),
+        id: 'digestFrequency',
+        name: 'digestFrequency',
+        options: [
+            { value: 'weekly', label: 'Weekly'|t('my') },
+            { value: 'daily', label: 'Daily'|t('my') },
+        ],
+        value: settings.digestFrequency,
+        toggle: true,
+        targetPrefix: 'my-digest-',
+    }) }}
+
+    <div id="my-digest-weekly" class="{{ settings.digestFrequency != 'weekly' ? 'hidden' }}">
+        {{ forms.selectField({
+            label: 'Day of the week'|t('my'),
+            id: 'digestWeekday',
+            name: 'digestWeekday',
+            options: weekdayOptions,
+            value: settings.digestWeekday,
+            errors: settings.getErrors('digestWeekday'),
+        }) }}
+    </div>
+
+    {{ forms.selectField({
+        label: 'Hour'|t('my'),
+        instructions: 'In the system time zone ({timeZone}). Sent at or after this hour — a missed hour still sends later the same day.'|t('my', { timeZone: timeZone }),
+        id: 'digestHour',
+        name: 'digestHour',
+        options: hourOptions,
+        value: settings.digestHour,
+        errors: settings.getErrors('digestHour'),
+    }) }}
+
+    {{ forms.lightswitchField({
+        label: 'Send even when nothing happened'|t('my'),
+        instructions: 'Off: a period with no pushes and no new problems sends nothing.'|t('my'),
+        id: 'digestSendWhenEmpty',
+        name: 'digestSendWhenEmpty',
+        on: settings.digestSendWhenEmpty,
+    }) }}
+
+    {{ forms.lightswitchField({
+        label: 'Check from web requests too'|t('my'),
+        instructions: 'For sites without a cron job running `php craft my/digest/send`. Looks at the schedule at most every five minutes and sends through the queue.'|t('my'),
+        id: 'digestWebTrigger',
+        name: 'digestWebTrigger',
+        on: settings.digestWebTrigger,
+    }) }}
+
+    <p class="light">
+        {% if digestState.lastSentAt ?? null %}
+            {{ 'Last sent {date}.'|t('my', { date: digestState.lastSentAt|datetime('short') }) }}
+        {% else %}
+            {{ 'Not sent yet.'|t('my') }}
+        {% endif %}
+        {% if digestNext %}
+            {{ 'Next due {date}.'|t('my', { date: digestNext|datetime('short') }) }}
+        {% endif %}
+    </p>
+</div>
+
+<div class="field">
+    <div class="flex flex-wrap">
+        <button type="button" class="btn" data-my-action="my/digest/send-test" data-my-result-for="digest-test">{{ 'Send a test summary now'|t('my') }}</button>
+        <span class="light" data-my-result="digest-test" role="status" aria-live="polite">{{ 'Goes to the alert recipients (or to you, if there are none), marked as a test. It does not count as this period’s summary.'|t('my') }}</span>
+    </div>
+</div>
+
 {# ------------------------------------------------------------------ Advanced #}
 <hr>
 <h2>{{ 'Advanced'|t('my') }}</h2>

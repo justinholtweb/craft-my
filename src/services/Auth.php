@@ -44,6 +44,14 @@ class Auth extends Component
     private ?Connection $_connection = null;
 
     /**
+     * Extra Guzzle client options for the token endpoint, merged over the defaults. Empty in
+     * production; the test suite puts a `MockHandler` stack here.
+     *
+     * @var array<string, mixed>
+     */
+    public array $clientConfig = [];
+
+    /**
      * The stored connection, or an empty one in the configured mode.
      */
     public function getConnection(): Connection
@@ -221,12 +229,24 @@ class Auth extends Component
 
             $settings = Plugin::getInstance()->getSettings();
 
-            $data = $this->postToken([
-                'client_id' => $settings->getParsedClientId(),
-                'client_secret' => $settings->getParsedClientSecret(),
-                'refresh_token' => $connection->refreshToken,
-                'grant_type' => 'refresh_token',
-            ], 'oauth.refresh');
+            try {
+                $data = $this->postToken([
+                    'client_id' => $settings->getParsedClientId(),
+                    'client_secret' => $settings->getParsedClientSecret(),
+                    'refresh_token' => $connection->refreshToken,
+                    'grant_type' => 'refresh_token',
+                ], 'oauth.refresh');
+            } catch (MyobApiException $e) {
+                // MYOB refusing the refresh token is the one failure nobody notices: every push
+                // after it fails the same way, and the merchant hears about it from their
+                // bookkeeper. A 4xx (`invalid_grant`, `invalid_client`) is a refusal; no status at
+                // all is the network, and a 5xx is MYOB having a bad day — both retry.
+                if ($e->statusCode !== null && $e->statusCode >= 400 && $e->statusCode < 500) {
+                    Plugin::getInstance()->getAlerts()->noteAuthFailure($e->getMessage());
+                }
+
+                throw $e;
+            }
 
             $this->applyToken($connection, $data);
             $this->saveConnection($connection);
@@ -534,7 +554,7 @@ class Auth extends Component
 
     private function tokenClient(): Client
     {
-        return Craft::createGuzzleClient([
+        return Craft::createGuzzleClient(array_merge([
             'timeout' => Plugin::getInstance()->getSettings()->timeout,
             // The form body carries the client secret and the refresh token; a 307 must not be
             // able to replay it anywhere else.
@@ -542,6 +562,6 @@ class Auth extends Component
             'headers' => [
                 'Accept' => 'application/json',
             ],
-        ]);
+        ], $this->clientConfig));
     }
 }

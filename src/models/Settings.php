@@ -40,6 +40,9 @@ class Settings extends Model
     public const REFUND_CREDIT_NOTE = 'creditNote';
     public const REFUND_CREDIT_NOTE_AND_REFUND = 'creditNoteAndRefund';
 
+    public const DIGEST_DAILY = 'daily';
+    public const DIGEST_WEEKLY = 'weekly';
+
     /**
      * MYOB's own list of payment methods on a customer payment. Anything else is rejected by the
      * company file, so the mapping UI only ever offers these.
@@ -314,6 +317,93 @@ class Settings extends Model
      */
     public int $logRetentionDays = 30;
 
+    // Alerts
+    // -------------------------------------------------------------------------
+    // Nothing here is `required`: an empty recipient list and an empty webhook URL simply mean
+    // nobody is told, and a fresh install must be able to save every other setting.
+
+    /**
+     * Who is told when pushes fail, a booked invoice does not match the order, or MYOB refuses the
+     * connection — and who gets the sync summary. Addresses separated by commas, semicolons or new
+     * lines, or an `$ENV` reference that resolves to them.
+     */
+    public string $alertRecipients = '';
+
+    /** A Slack or Teams incoming-webhook URL (or `$ENV`). Sent through the SSRF guard. */
+    public string $alertWebhookUrl = '';
+
+    /** `slack`, `teams` or `json` — the shape of the webhook body. */
+    public string $alertWebhookFormat = 'slack';
+
+    /** Optional. When set, the webhook carries an `X-My-Signature` HMAC of its body. */
+    public string $alertWebhookSecret = '';
+
+    /** Invoices, payments, credit notes or refunds left `failed` for a human. */
+    public bool $alertOnFailures = true;
+
+    /**
+     * This many failures inside the window opens the incident. One by default: every failure is an
+     * order that is not in the books.
+     */
+    public int $alertFailureThreshold = 1;
+
+    /** The window failures and mismatched invoices are counted in, in minutes. */
+    public int $alertWindowMinutes = 60;
+
+    /**
+     * An invoice MYOB booked at a different total from the order — the push succeeded, and the
+     * books are wrong. Usually a tax code mapped to the wrong rate.
+     */
+    public bool $alertOnMismatch = true;
+
+    /**
+     * MYOB refusing the refresh token, or a 401 that refreshing did not fix (in local mode, a 401
+     * at all). Nothing is pushed until somebody reconnects.
+     */
+    public bool $alertOnAuthFailure = true;
+
+    /** An incident that reopens this soon after its recovery message waits out the rest. */
+    public int $alertCooldownMinutes = 60;
+
+    /**
+     * Config-file only: let the alert webhook reach private, loopback and link-local hosts (a
+     * self-hosted Mattermost on the LAN). The scheme and no-redirect rules still hold.
+     */
+    public bool $allowPrivateAlertWebhookHosts = false;
+
+    // Sync summary
+    // -------------------------------------------------------------------------
+
+    /** Email a summary of what went to MYOB, to the alert recipients, on a schedule. */
+    public bool $digestEnabled = false;
+
+    /** `daily` or `weekly`. */
+    public string $digestFrequency = self::DIGEST_WEEKLY;
+
+    /** ISO day of the week for a weekly summary: 1 is Monday, 7 is Sunday. */
+    public int $digestWeekday = 1;
+
+    /**
+     * Hour of the day, 0–23, in the system time zone, after which the summary for the day or week
+     * becomes due. "After", not "at": a site whose cron missed the hour still sends later in the
+     * same period, once.
+     */
+    public int $digestHour = 8;
+
+    /**
+     * Send a summary even when nothing was pushed and nothing new went wrong.
+     *
+     * Off by default. A weekly email that says "nothing happened" teaches everybody who gets it to
+     * stop opening it.
+     */
+    public bool $digestSendWhenEmpty = false;
+
+    /**
+     * Also check whether a summary is due at the end of web requests (at most every five minutes)
+     * and queue it, for sites without a cron job running `my/digest/send`.
+     */
+    public bool $digestWebTrigger = true;
+
     /**
      * @inheritdoc
      */
@@ -367,7 +457,79 @@ class Settings extends Model
                 'string',
             ],
             [['invoiceStatusHandles', 'taxCodeMap', 'paymentMethodMap', 'taxInclusive'], 'safe'],
+            [
+                [
+                    'alertOnFailures', 'alertOnMismatch', 'alertOnAuthFailure',
+                    'allowPrivateAlertWebhookHosts', 'digestEnabled', 'digestSendWhenEmpty',
+                    'digestWebTrigger',
+                ],
+                'boolean',
+            ],
+            [['alertFailureThreshold'], 'integer', 'min' => 1, 'max' => 10000],
+            [['alertWindowMinutes'], 'integer', 'min' => 5, 'max' => 10080],
+            [['alertCooldownMinutes'], 'integer', 'min' => 0, 'max' => 10080],
+            [['alertWebhookFormat'], 'in', 'range' => ['slack', 'teams', 'json']],
+            [['alertRecipients', 'alertWebhookUrl', 'alertWebhookSecret'], 'string', 'max' => 2000],
+            [['alertRecipients'], 'validateRecipients'],
+            [['alertWebhookUrl'], 'validateWebhookUrl'],
+            [['digestFrequency'], 'in', 'range' => [self::DIGEST_DAILY, self::DIGEST_WEEKLY]],
+            [['digestWeekday'], 'integer', 'min' => 1, 'max' => 7],
+            [['digestHour'], 'integer', 'min' => 0, 'max' => 23],
         ];
+    }
+
+    /**
+     * Every address must be one, when there are any. An `$ENV` reference that is not set yet is
+     * allowed — a staging site legitimately has no recipients.
+     */
+    public function validateRecipients(string $attribute): void
+    {
+        foreach ($this->recipientList(false) as $address) {
+            if (filter_var($address, FILTER_VALIDATE_EMAIL) === false) {
+                $this->addError($attribute, Craft::t('my', '“{address}” is not an email address.', ['address' => $address]));
+            }
+        }
+    }
+
+    /**
+     * Only the shape is checked here. Where the host resolves is checked at send time, every time,
+     * because DNS can change between a save and a send.
+     */
+    public function validateWebhookUrl(string $attribute): void
+    {
+        $url = trim((string)App::parseEnv($this->alertWebhookUrl));
+
+        if ($url === '' || str_starts_with($url, '$')) {
+            return;
+        }
+
+        $scheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
+
+        if (!in_array($scheme, ['http', 'https'], true) || !parse_url($url, PHP_URL_HOST)) {
+            $this->addError($attribute, Craft::t('my', 'Only http:// and https:// webhook URLs are allowed.'));
+        }
+    }
+
+    /**
+     * The alert (and summary) recipients, with `$ENV` resolved, split on commas, semicolons and
+     * whitespace, de-duplicated.
+     *
+     * @param bool $validOnly Drop anything that is not an email address.
+     * @return string[]
+     */
+    public function recipientList(bool $validOnly = true): array
+    {
+        $raw = trim((string)App::parseEnv($this->alertRecipients));
+
+        if ($raw === '' || str_starts_with($raw, '$')) {
+            return [];
+        }
+
+        $list = array_values(array_unique(array_filter(array_map('trim', preg_split('/[\s,;]+/', $raw) ?: []))));
+
+        return $validOnly
+            ? array_values(array_filter($list, static fn(string $a) => filter_var($a, FILTER_VALIDATE_EMAIL) !== false))
+            : $list;
     }
 
     public function validateLocalBaseUrl(string $attribute): void
@@ -540,6 +702,13 @@ class Settings extends Model
             'salesAccount' => Craft::t('my', 'Sales account'),
             'localBaseUrl' => Craft::t('my', 'AccountRight server URL'),
             'tolerance' => Craft::t('my', 'Rounding tolerance'),
+            'alertRecipients' => Craft::t('my', 'Email alerts to'),
+            'alertWebhookUrl' => Craft::t('my', 'Slack or Teams webhook URL'),
+            'alertFailureThreshold' => Craft::t('my', 'Failures that open an alert'),
+            'alertWindowMinutes' => Craft::t('my', 'Window'),
+            'alertCooldownMinutes' => Craft::t('my', 'Quiet period after a recovery'),
+            'digestWeekday' => Craft::t('my', 'Day of the week'),
+            'digestHour' => Craft::t('my', 'Hour'),
         ];
     }
 }

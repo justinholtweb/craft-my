@@ -268,6 +268,42 @@ than its own name.
 | **Log payloads** | On | Keep request and response bodies in the log. Credentials and tokens are redacted first |
 | **Log retention** | 30 | Days of log to keep. 0 keeps everything. Pruned on Craft's garbage collection |
 
+## Alerts
+
+Who hears about it when pushes fail, MYOB books a different total, or MYOB refuses the
+connection — one message when it starts, one when it clears. The full story is in
+[Alerts and the sync summary](alerts.md).
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Email alerts to** | blank | Addresses separated by commas, or an environment variable. The sync summary goes to the same people |
+| **Slack or Teams webhook URL** | blank | An incoming-webhook URL, best kept in an environment variable. Public hosts only; redirects are never followed |
+| **Webhook format** | Slack | Slack, Microsoft Teams, or plain JSON for your own receiver |
+| **Webhook signing secret** | blank | Adds `X-My-Timestamp` and `X-My-Signature` (an HMAC of `timestamp.body`) to each webhook |
+| **Alert when pushes fail** | On | Documents left failed after the queue has stopped retrying |
+| **Failures that open an alert** | 1 | How many inside the window |
+| **Alert when MYOB books a different total** | On | The invoice went through at the wrong amount |
+| **Window** | 60 | Minutes. An incident clears after a whole window with nothing new |
+| **Alert when MYOB refuses the connection** | On | A refused refresh token, or a 401 a fresh token did not fix. Also puts a banner across the control panel |
+| **Quiet period after a recovery** | 60 | Minutes. A flapping connection gets one alert and one recovery per quiet period |
+
+**Send a test alert** sends a sample through every configured channel, using the *saved*
+settings.
+
+## Sync summary
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Email a sync summary** | Off | What went to MYOB, what did not, and what still needs a look — to the alert recipients |
+| **How often** | Weekly | Or daily |
+| **Day of the week** | Monday | For a weekly summary |
+| **Hour** | 08:00 | In the system time zone. Sent at or after this hour |
+| **Send even when nothing happened** | Off | Off: a period with nothing pushed and nothing new wrong sends nothing |
+| **Check from web requests too** | On | For sites without a cron job running `php craft my/digest/send` |
+
+**Send a test summary now** sends what the next one would say, marked as a test. It never counts
+as the period's summary.
+
 ## Config file
 
 Every setting can be set in `config/my.php`, which overrides the settings screen, and can vary
@@ -308,3 +344,4 @@ A few settings are only available here:
 | `salespersonUid` | blank | A MYOB salesperson (employee card) UID stamped on every invoice |
 | `discountDescription` | `Discount` | The description on cart-level discount lines |
 | `roundingDescription` | `Rounding` | The description on the rounding line |
+| `allowPrivateAlertWebhookHosts` | `false` | Let the alert webhook reach a private, loopback or link-local host (a Mattermost on your own network). The scheme and no-redirect rules still apply |

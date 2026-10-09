@@ -115,6 +115,22 @@ class Sync extends Component
      */
     public function pushOrder(Order $order, bool $force = false): array
     {
+        try {
+            return $this->pushOrderSerialised($order, $force);
+        } finally {
+            // Every push is a chance to notice trouble without cron. Fail-open: see afterSync().
+            Plugin::getInstance()->getAlerts()->afterSync();
+        }
+    }
+
+    /**
+     * {@see pushOrder()} under the order's lock; `pushOrder()` wraps it so every exit evaluates
+     * the alerts.
+     *
+     * @return array{ok: bool, invoice: SyncDocument|null, payments: SyncDocument[], refunds: SyncDocument[], messages: string[]}
+     */
+    private function pushOrderSerialised(Order $order, bool $force): array
+    {
         $mutex = Craft::$app->getMutex();
         $lock = self::PUSH_LOCK_PREFIX . $order->id;
 
@@ -761,14 +777,46 @@ class Sync extends Component
         return $hash !== '' ? mb_substr($hash, 0, 64) : 'txn:' . $transaction->id;
     }
 
+    /**
+     * Synced documents MYOB booked at a different total from the order.
+     *
+     * `succeed()` keeps `verifyAgainstOrder()`'s complaint in `lastError` on an otherwise synced
+     * row, and a clean push clears it — so "synced with an error" is exactly "in the books, at the
+     * wrong amount". The alerts, the Orders index status and the summary all ask through this, so
+     * they cannot disagree about what a mismatch is.
+     *
+     * @param string $alias the documents table's alias in the query, if it has one
+     * @return array<int|string, mixed>
+     */
+    public static function mismatchCondition(string $alias = ''): array
+    {
+        $p = $alias !== '' ? $alias . '.' : '';
+
+        return [
+            'and',
+            [$p . 'status' => SyncDocument::STATUS_SYNCED],
+            ['not', [$p . 'lastError' => null]],
+            ['not', [$p . 'lastError' => '']],
+        ];
+    }
+
     private function buildQuery(array $criteria): Query
     {
         $query = (new Query())->from([Table::DOCUMENTS]);
 
         foreach (['docType', 'status', 'orderId'] as $key) {
-            if (!empty($criteria[$key])) {
-                $query->andWhere([$key => $criteria[$key]]);
+            if (empty($criteria[$key])) {
+                continue;
             }
+
+            // Not a stored status: the documents screen's "Booked at a different total" filter,
+            // which alerts and the summary link to.
+            if ($key === 'status' && $criteria[$key] === SyncDocument::STATUS_MISMATCH) {
+                $query->andWhere(self::mismatchCondition());
+                continue;
+            }
+
+            $query->andWhere([$key => $criteria[$key]]);
         }
 
         return $query;

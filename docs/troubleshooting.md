@@ -225,6 +225,23 @@ their existing card in MYOB. Already-created duplicates can be merged in Account
 
 **Update existing cards** is on. Turn it off to leave existing cards alone.
 
+## Alerts and the sync summary
+
+- **No alert arrived.** Press **Send a test alert** (or run `php craft my/alerts/test`). If the
+  test arrives, check **MYOB health** on the Dashboard: an incident that is already open does not
+  alert again until it clears. An environment with no company file connected checks nothing.
+- **"That host doesn't resolve, or resolves to a private, loopback or link-local address."** The
+  webhook URL points somewhere My refuses to post to. A Mattermost on your own network needs
+  `allowPrivateAlertWebhookHosts` in `config/my.php`.
+- **"Save some recipients or a webhook URL first."** The test uses the saved settings. Save, then
+  test.
+- **The "MYOB refused the connection" banner won't go away.** It clears on the next request MYOB
+  accepts. Reconnect on the settings screen (or fix the company file username and password in
+  local mode) and press **Test connection**.
+- **No summary arrived.** Run `php craft my/digest/status`. A period with nothing pushed and
+  nothing new wrong sends nothing unless **Send even when nothing happened** is on. Without cron,
+  the summary goes out through the queue after a web request, so the queue has to be running.
+
 ## The log
 
 - **The log is empty.** **Log requests** is off.
