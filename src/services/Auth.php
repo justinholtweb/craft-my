@@ -531,7 +531,7 @@ class Auth extends Component
         return match ($error) {
             'invalid_grant' => Craft::t('my', 'MYOB rejected the refresh token. This happens when the connection is authorised again elsewhere, revoked, or the MYOB password changes — reconnect on the settings screen.'),
             'invalid_client' => Craft::t('my', 'MYOB rejected the API key and secret.'),
-            'invalid_request' => Craft::t('my', 'MYOB rejected the token request. Check that the redirect URI registered on developer.myob.com matches this site exactly.'),
+            'invalid_request' => Craft::t('my', 'MYOB rejected the request for an access token. Check that the redirect URI registered on developer.myob.com matches this site exactly.'),
             default => $fallback,
         };
     }

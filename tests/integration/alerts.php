@@ -127,6 +127,22 @@ check('MYOB’s own error wording survives redaction', function() use ($alerts) 
     return $out === 'Invalid data — Account 4-1000 does not exist' ?: $out;
 });
 
+check('My’s own token-refusal explanations survive redaction whole', function() use ($alerts) {
+    // They reach the auth alert verbatim, and the credential pattern eats the word after "token ".
+    $explain = new ReflectionMethod(Plugin::getInstance()->getAuth(), 'explainTokenFailure');
+    $bad = [];
+
+    foreach (['invalid_grant', 'invalid_client', 'invalid_request'] as $error) {
+        $text = $explain->invoke(Plugin::getInstance()->getAuth(), 400, json_encode(['error' => $error]), 'fallback');
+
+        if ($alerts->redact($text) !== $text) {
+            $bad[] = $alerts->redact($text);
+        }
+    }
+
+    return $bad === [] ?: implode(' | ', $bad);
+});
+
 check('tags are stripped and the length is capped', function() use ($alerts) {
     $out = $alerts->redact('<b>x</b>' . str_repeat('y', 900));
 

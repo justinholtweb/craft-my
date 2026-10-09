@@ -25,6 +25,12 @@
 - The documents screen can be filtered to invoices booked at a different total.
 - `my/alerts/check` and `my/alerts/test`.
 
+### Changed
+
+- MYOB's `invalid_request` refusal now reads "MYOB rejected the request for an access token…".
+  The old "…rejected the token request…" reached the authentication alert as "the token ••••",
+  because alert redaction masks whatever follows the word "token".
+
 ## 5.0.0 — 2026-08-20
 
 Initial release.

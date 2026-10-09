@@ -21,7 +21,7 @@ MYOB answers a bad OAuth token and a bad company file login with the same `401`,
   `Administrator`.
 - If the company file login is right, press **Reconnect** to re-authorise.
 
-### "MYOB rejected the token request. Check that the redirect URI registered on developer.myob.com matches this site exactly."
+### "MYOB rejected the request for an access token. Check that the redirect URI registered on developer.myob.com matches this site exactly."
 
 MYOB's `invalid_request`. The redirect URL registered on your app doesn't match the one My sent,
 character for character. Copy **Redirect URL** from the settings screen and paste it into the app

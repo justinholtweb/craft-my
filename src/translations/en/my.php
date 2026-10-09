@@ -150,7 +150,7 @@ return [
     'MYOB rejected the credentials. Either the connection needs re-authorising, or the company file username and password are wrong — they are the login for the file itself, not your MYOB account.' => 'MYOB rejected the credentials. Either the connection needs re-authorising, or the company file username and password are wrong — they are the login for the file itself, not your MYOB account.',
     'MYOB rejected the refresh token. This happens when the connection is authorised again elsewhere, revoked, or the MYOB password changes — reconnect on the settings screen.' => 'MYOB rejected the refresh token. This happens when the connection is authorised again elsewhere, revoked, or the MYOB password changes — reconnect on the settings screen.',
     'MYOB rejected the request as invalid.' => 'MYOB rejected the request as invalid.',
-    'MYOB rejected the token request. Check that the redirect URI registered on developer.myob.com matches this site exactly.' => 'MYOB rejected the token request. Check that the redirect URI registered on developer.myob.com matches this site exactly.',
+    'MYOB rejected the request for an access token. Check that the redirect URI registered on developer.myob.com matches this site exactly.' => 'MYOB rejected the request for an access token. Check that the redirect URI registered on developer.myob.com matches this site exactly.',
     'MYOB request failed' => 'MYOB request failed',
     'MYOB returned a non-JSON response ({code}). Check that the API URL is right.' => 'MYOB returned a non-JSON response ({code}). Check that the API URL is right.',
     'MYOB returned no access token.' => 'MYOB returned no access token.',
