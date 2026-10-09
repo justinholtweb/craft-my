@@ -182,8 +182,8 @@ No local PHP on this Mac. Everything runs inside the plugin-testing container:
 ```sh
 cd ~/Sites/plugin-testing
 ddev exec php /var/www/craft-my/tests/integration/checks.php   # 231 checks
-docker exec -w /var/www/html ddev-plugin-testing-web php /var/www/craft-my/tests/integration/alerts.php  # 59: latch, mail, SSRF, webhook, auth signals, banner, widget, console, test action over HTTP
-docker exec -w /var/www/html ddev-plugin-testing-web php /var/www/craft-my/tests/integration/orders.php  # 22: status sets vs SQL, condition rule, column + action in process and over HTTP
+docker exec -w /var/www/html ddev-plugin-testing-web php /var/www/craft-my/tests/integration/alerts.php  # 60: latch, mail, SSRF, webhook, auth signals, banner, widget, console, test action over HTTP
+docker exec -w /var/www/html ddev-plugin-testing-web php /var/www/craft-my/tests/integration/orders.php  # 27: status sets vs SQL, condition rule (incl. stale values), column + action in process and over HTTP
 docker exec -w /var/www/html ddev-plugin-testing-web php /var/www/craft-my/tests/integration/digest.php  # 34: schedule, marker claim/release, email, fallback, console, test action over HTTP
 ddev exec bash -c 'find /var/www/craft-my/src -name "*.php" -print0 | xargs -0 -n1 php -l'
 ```

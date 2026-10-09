@@ -31,6 +31,13 @@
   The old "…rejected the token request…" reached the authentication alert as "the token ••••",
   because alert redaction masks whatever follows the word "token".
 
+### Fixed
+
+- A saved **MYOB status** filter or custom source whose chosen statuses had all since been renamed
+  or removed no longer widens to every order. "Is one of" now matches nothing, "is not one of"
+  excludes nothing, and the stale values are kept rather than stripped, so re-saving the source no
+  longer loses them for good. Only statuses My knows ever reach the query.
+
 ## 5.0.0 — 2026-08-20
 
 Initial release.

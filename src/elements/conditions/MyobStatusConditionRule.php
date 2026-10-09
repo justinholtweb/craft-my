@@ -41,14 +41,22 @@ class MyobStatusConditionRule extends BaseMultiSelectConditionRule implements El
     }
 
     /**
-     * Only the statuses My knows: a hand-edited or stale condition cannot smuggle anything else
-     * into the query.
+     * Keeps every value that was chosen, known or not. Stripping unknown ones here would turn a
+     * saved "is one of" whose statuses have all since been renamed or removed into an empty rule —
+     * no filter, every order — and the next save of that source would lose them for good. Only
+     * {@see knownValues()} ever reaches SQL, so a stale or hand-edited value still cannot.
      *
      * @param string|string[] $values
      */
     public function setValues(array|string $values): void
     {
-        parent::setValues(array_values(array_intersect((array)$values, array_keys(OrderStatus::options()))));
+        if ($values === '') {
+            parent::setValues([]);
+
+            return;
+        }
+
+        parent::setValues(array_values(array_map('strval', array_filter((array)$values, 'is_scalar'))));
     }
 
     /**
@@ -70,20 +78,32 @@ class MyobStatusConditionRule extends BaseMultiSelectConditionRule implements El
      */
     public function modifyQuery(ElementQueryInterface $query): void
     {
-        $values = $this->getValues();
+        // Nothing chosen: no filter (Craft's convention for an empty multi-select).
+        if ($this->getValues() === []) {
+            return;
+        }
 
-        if ($values === []) {
+        $known = $this->knownValues();
+        $not = $this->operator === self::OPERATOR_NOT_IN;
+
+        // Chosen, but none of them a status My still knows: "is one of" matches nothing and
+        // "is not one of" excludes nothing. Never fall through to "no filter" for "is one of".
+        if ($known === []) {
+            if (!$not) {
+                $query->andWhere('0=1');
+            }
+
             return;
         }
 
         $statuses = Plugin::getInstance()->getOrderStatus();
         $condition = ['or'];
 
-        foreach ($values as $status) {
+        foreach ($known as $status) {
             $condition[] = $statuses->condition($status);
         }
 
-        $query->andWhere($this->operator === self::OPERATOR_NOT_IN ? ['not', $condition] : $condition);
+        $query->andWhere($not ? ['not', $condition] : $condition);
     }
 
     /**
@@ -91,6 +111,8 @@ class MyobStatusConditionRule extends BaseMultiSelectConditionRule implements El
      */
     public function matchElement(ElementInterface $element): bool
     {
+        // Every stored value is compared, known or not. An order's own status is always a known
+        // one, so a stale value never matches: the same answer modifyQuery() gives.
         if (!$element instanceof Order || !$element->id) {
             return $this->matchValue(OrderStatus::NONE);
         }
@@ -98,5 +120,15 @@ class MyobStatusConditionRule extends BaseMultiSelectConditionRule implements El
         $status = Plugin::getInstance()->getOrderStatus()->statuses([$element->id])[$element->id]['status'] ?? OrderStatus::NONE;
 
         return $this->matchValue($status);
+    }
+
+    /**
+     * The chosen values My knows — the only ones that ever reach the query.
+     *
+     * @return string[]
+     */
+    private function knownValues(): array
+    {
+        return array_values(array_intersect($this->getValues(), array_map('strval', array_keys(OrderStatus::options()))));
     }
 }

@@ -135,11 +135,78 @@ check('matchElement agrees with the query', function() use ($fixtures) {
     return $rule->matchElement($fixtures[OrderStatus::PENDING]) && !$rule->matchElement($fixtures[OrderStatus::SYNCED]) ?: 'disagrees';
 });
 
-check('a stale or hand-edited value cannot reach the query', function() {
+check('a stale or hand-edited value is kept but cannot reach the query', function() use ($ids) {
     $rule = new MyobStatusConditionRule();
     $rule->setValues(['failed', "x') OR 1=1 --", 'nonsense']);
+    $query = Order::find()->id(array_values($ids))->status(null);
+    $rule->modifyQuery($query);
+    $sql = $query->createCommand()->getRawSql();
 
-    return $rule->getValues() === ['failed'] ?: json_encode($rule->getValues());
+    return $rule->getValues() === ['failed', "x') OR 1=1 --", 'nonsense']
+        && !str_contains($sql, '1=1 --') && !str_contains($sql, 'nonsense')
+        && array_map('intval', $query->ids()) === [$ids[OrderStatus::FAILED]]
+        ?: json_encode([$rule->getValues(), $query->ids()]);
+});
+
+// A status renamed or removed in a later release leaves a saved source holding values My no
+// longer knows. "Is one of" nothing-known must match nothing — never widen to every order.
+$allOrders = static fn() => Order::find()->status(null);
+$baseCount = (int)$allOrders()->count();
+
+check('only unknown values + “is one of” matches no orders, and matchElement agrees', function() use ($allOrders, $fixtures) {
+    $rule = new MyobStatusConditionRule();
+    $rule->operator = 'in';
+    $rule->setValues(['bogus']);
+    $query = $allOrders();
+    $rule->modifyQuery($query);
+    $count = (int)$query->count();
+
+    return $count === 0 && !$rule->matchElement($fixtures[OrderStatus::SYNCED]) && !$rule->matchElement($fixtures[OrderStatus::NONE])
+        ?: "matched $count";
+});
+
+check('only unknown values + “is not one of” excludes nothing, and matchElement agrees', function() use ($allOrders, $baseCount, $fixtures) {
+    $rule = new MyobStatusConditionRule();
+    $rule->operator = 'ni';
+    $rule->setValues(['bogus']);
+    $query = $allOrders();
+    $rule->modifyQuery($query);
+    $count = (int)$query->count();
+
+    return $count === $baseCount && $rule->matchElement($fixtures[OrderStatus::SYNCED]) && $rule->matchElement($fixtures[OrderStatus::NONE])
+        ?: "$count of $baseCount";
+});
+
+check('nothing chosen is no filter', function() use ($allOrders, $baseCount) {
+    $rule = new MyobStatusConditionRule();
+    $rule->operator = 'in';
+    $rule->setValues([]);
+    $query = $allOrders();
+    $rule->modifyQuery($query);
+
+    return (int)$query->count() === $baseCount ?: (int)$query->count() . " of $baseCount";
+});
+
+check('a known value beside a stale one still filters as before', function() use ($allOrders, $ids) {
+    $rule = new MyobStatusConditionRule();
+    $rule->operator = 'in';
+    $rule->setValues(['bogus', OrderStatus::MISMATCH]);
+    $query = $allOrders()->id(array_values($ids));
+    $rule->modifyQuery($query);
+
+    return array_map('intval', $query->ids()) === [$ids[OrderStatus::MISMATCH]] ?: json_encode($query->ids());
+});
+
+check('a saved rule keeps its stale value through getConfig() → createConditionRule()', function() use ($allOrders) {
+    $rule = new MyobStatusConditionRule();
+    $rule->operator = 'in';
+    $rule->setValues(['bogus']);
+    $copy = Craft::$app->getConditions()->createConditionRule($rule->getConfig());
+    $query = $allOrders();
+    $copy->modifyQuery($query);
+
+    return $copy instanceof MyobStatusConditionRule && $copy->getValues() === ['bogus'] && (int)$query->count() === 0
+        ?: json_encode($copy->getConfig());
 });
 
 check('the rule validates (value only — the operator is uninitialised until set)', function() {
